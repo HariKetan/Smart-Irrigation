@@ -1,0 +1,183 @@
+@import "tailwindcss";
+/* Assuming you have tw-animate-css installed or available */
+/* @import "tw-animate-css"; */ /* Uncomment if needed */
+
+/* Define custom variant for dark mode targeting */
+@custom-variant dark (&:is(.dark *));
+
+/* Inline theme definition (maps CSS variables to Tailwind classes if needed by a plugin) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans); /* Assuming these font variables exist */
+  --font-mono: var(--font-geist-mono); /* Assuming these font variables exist */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground); /* Added for B&W destructive */
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* --- Light Mode Variables (Black & White) --- */
+:root {
+  --radius: 0.625rem;
+
+  /* Base */
+  --background: oklch(1 0 0); /* White */
+  --foreground: oklch(0 0 0); /* Black */
+
+  /* Card */
+  --card: oklch(1 0 0); /* White */
+  --card-foreground: oklch(0 0 0); /* Black */
+
+  /* Popover */
+  --popover: oklch(1 0 0); /* White */
+  --popover-foreground: oklch(0 0 0); /* Black */
+
+  /* Primary */
+  --primary: oklch(0.15 0 0);   /* Dark Gray */
+  --primary-foreground: oklch(1 0 0); /* White */
+
+  /* Secondary */
+  --secondary: oklch(0.92 0 0); /* Very Light Gray */
+  --secondary-foreground: oklch(0.1 0 0); /* Dark Gray / Near Black */
+
+  /* Muted */
+  --muted: oklch(0.95 0 0); /* Almost White */
+  --muted-foreground: oklch(0.4 0 0); /* Medium Gray */
+
+  /* Accent */
+  --accent: oklch(0.92 0 0); /* Same as secondary */
+  --accent-foreground: oklch(0.1 0 0); /* Same as secondary-foreground */
+
+  /* Destructive */
+  --destructive: oklch(0.2 0 0); /* Dark Gray for destructive actions */
+  --destructive-foreground: oklch(1 0 0); /* White text on destructive */
+
+  /* Border & Input */
+  --border: oklch(0.88 0 0); /* Light Gray */
+  --input: oklch(0.94 0 0);  /* Very Light Gray (slightly off-white for input bg) */
+
+  /* Ring (Focus) */
+  --ring: oklch(0.3 0 0); /* Medium-Dark Gray for focus rings */
+
+  /* Chart Colors (Shades of Gray) */
+  --chart-1: oklch(0.8 0 0); /* Light Gray */
+  --chart-2: oklch(0.65 0 0); /* Medium-Light Gray */
+  --chart-3: oklch(0.5 0 0); /* Medium Gray */
+  --chart-4: oklch(0.35 0 0); /* Medium-Dark Gray */
+  --chart-5: oklch(0.2 0 0); /* Dark Gray */
+
+  /* Sidebar Specific */
+  --sidebar: oklch(0.97 0 0); /* Very light gray, almost white */
+  --sidebar-foreground: oklch(0 0 0); /* Black */
+  --sidebar-primary: oklch(0.15 0 0); /* Dark Gray */
+  --sidebar-primary-foreground: oklch(1 0 0); /* White */
+  --sidebar-accent: oklch(0.9 0 0); /* Light Gray accent */
+  --sidebar-accent-foreground: oklch(0.05 0 0); /* Very Dark Gray / Black */
+  --sidebar-border: oklch(0.88 0 0); /* Light Gray */
+  --sidebar-ring: oklch(0.3 0 0); /* Medium-Dark Gray */
+}
+
+/* --- Dark Mode Variables (Black & White) --- */
+.dark {
+  /* Base */
+  --background: oklch(0 0 0); /* Black */
+  --foreground: oklch(1 0 0); /* White */
+
+  /* Card */
+  --card: oklch(0.1 0 0); /* Very Dark Gray, slightly lighter than bg */
+  --card-foreground: oklch(1 0 0); /* White */
+
+  /* Popover */
+  --popover: oklch(0.12 0 0); /* Very Dark Gray, slightly lighter than card */
+  --popover-foreground: oklch(1 0 0); /* White */
+
+  /* Primary */
+  --primary: oklch(0.85 0 0); /* Light Gray */
+  --primary-foreground: oklch(0 0 0); /* Black */
+
+  /* Secondary */
+  --secondary: oklch(0.25 0 0); /* Dark Gray */
+  --secondary-foreground: oklch(0.95 0 0); /* Very Light Gray / Near White */
+
+  /* Muted */
+  --muted: oklch(0.2 0 0); /* Dark Gray */
+  --muted-foreground: oklch(0.65 0 0); /* Medium-Light Gray */
+
+  /* Accent */
+  --accent: oklch(0.25 0 0); /* Same as secondary */
+  --accent-foreground: oklch(0.95 0 0); /* Same as secondary-foreground */
+
+  /* Destructive */
+  --destructive: oklch(0.8 0 0); /* Light Gray for destructive actions */
+  --destructive-foreground: oklch(0 0 0); /* Black text on destructive */
+
+  /* Border & Input */
+  --border: oklch(0.3 0 0); /* Medium-Dark Gray */
+  --input: oklch(0.2 0 0); /* Dark Gray input bg */
+
+  /* Ring (Focus) */
+  --ring: oklch(0.75 0 0); /* Light Gray focus ring */
+
+  /* Chart Colors (Brighter Grays for Dark Mode) */
+  --chart-1: oklch(0.25 0 0); /* Dark Gray */
+  --chart-2: oklch(0.4 0 0);  /* Medium-Dark Gray */
+  --chart-3: oklch(0.55 0 0); /* Medium Gray */
+  --chart-4: oklch(0.7 0 0);  /* Medium-Light Gray */
+  --chart-5: oklch(0.85 0 0); /* Light Gray */
+
+  /* Sidebar Specific */
+  --sidebar: oklch(0.08 0 0); /* Very dark gray, slightly off-black */
+  --sidebar-foreground: oklch(1 0 0); /* White */
+  --sidebar-primary: oklch(0.85 0 0); /* Light Gray */
+  --sidebar-primary-foreground: oklch(0 0 0); /* Black */
+  --sidebar-accent: oklch(0.3 0 0); /* Medium-Dark Gray accent */
+  --sidebar-accent-foreground: oklch(1 0 0); /* White */
+  --sidebar-border: oklch(0.3 0 0); /* Medium-Dark Gray */
+  --sidebar-ring: oklch(0.75 0 0); /* Light Gray */
+}
+
+/* Base Layer Styles */
+@layer base {
+  * {
+    /* Apply border color and a semi-transparent focus ring */
+    @apply border-border outline-ring/50;
+  }
+  body {
+    /* Apply base background and text colors */
+    @apply bg-background text-foreground;
+    /* Add font smoothing for better text rendering (optional) */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
