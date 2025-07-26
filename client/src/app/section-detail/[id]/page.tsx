@@ -18,7 +18,6 @@ import {
   Power,
   MapPin,
   Clock,
-  Thermometer,
   Activity,
   TrendingUp,
   Calendar,
@@ -32,14 +31,12 @@ interface Section {
   crop: string
   moisture: number
   threshold: number
-  temperature: number
   waterUsed: number
   valveOpen: boolean
   lastIrrigation?: string
   nextIrrigation?: string
   area?: number
   location?: string
-  humidity?: number
   flowRate?: number
   dailyUsage?: number[]
   weeklyTarget?: number
@@ -61,7 +58,7 @@ export default function SectionDetailPage() {
   const fetchSection = async () => {
     try {
       const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/sections/${sectionId}`)
+      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}`)
       
       if (response.ok) {
         const data = await response.json()
@@ -88,7 +85,7 @@ export default function SectionDetailPage() {
     setToggling(true)
     try {
       const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/sections/${sectionId}/valve`, {
+      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/valve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -4,26 +4,21 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Droplets, Thermometer, Activity, Gauge, RefreshCw } from "lucide-react"
+import { Droplets, Activity, Gauge, RefreshCw } from "lucide-react"
 import { getApiBaseUrl } from "@/lib/api"
 
 interface Sensor {
-  id: number
+  id: string
   name: string
-  type: 'MOISTURE' | 'TEMPERATURE' | 'HUMIDITY' | 'PH' | 'NUTRIENT' | 'WATER_FLOW'
+  type: 'MOISTURE' | 'WATER_FLOW'
+  value: number
+  unit: string
+  zone: string
+  status: string
   location: string
+  lastReading: string
   isActive: boolean
-  zoneId?: number
-  zone?: {
-    id: number
-    name: string
-  }
-  readings?: {
-    id: number
-    value: number
-    unit: string
-    timestamp: string
-  }[]
+  zoneId: number
 }
 
 export default function DataDisplay() {
@@ -34,7 +29,7 @@ export default function DataDisplay() {
   const fetchSensors = async () => {
     try {
       const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/sensors`)
+      const response = await fetch(`${apiBaseUrl}/api/real/sensors`)
       
       if (response.ok) {
         const data = await response.json()
@@ -63,10 +58,6 @@ export default function DataDisplay() {
     switch (type) {
       case 'MOISTURE':
         return <Droplets className="h-4 w-4" />
-      case 'TEMPERATURE':
-        return <Thermometer className="h-4 w-4" />
-      case 'HUMIDITY':
-        return <Activity className="h-4 w-4" />
       case 'WATER_FLOW':
         return <Gauge className="h-4 w-4" />
       default:
@@ -78,10 +69,6 @@ export default function DataDisplay() {
     switch (type) {
       case 'MOISTURE':
         return 'text-blue-500'
-      case 'TEMPERATURE':
-        return 'text-red-500'
-      case 'HUMIDITY':
-        return 'text-green-500'
       case 'WATER_FLOW':
         return 'text-purple-500'
       default:
@@ -106,7 +93,7 @@ export default function DataDisplay() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-muted-foreground">Loading sensor data...</p>
-        </div>
+      </div>
       </div>
     )
   }
@@ -136,9 +123,8 @@ export default function DataDisplay() {
           </div>
 
           {/* Sensor Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sensors.map((sensor) => {
-              const latestReading = sensor.readings?.[0]
               return (
                 <Card key={sensor.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader className="pb-3">
@@ -161,20 +147,17 @@ export default function DataDisplay() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Current Value</span>
-                        <span className="text-lg font-semibold">
-                          {latestReading 
-                            ? `${latestReading.value} ${latestReading.unit}`
-                            : 'No data'
-                          }
+                        <span className="text-sm font-medium">
+                          {sensor.value} {sensor.unit}
                         </span>
                       </div>
                       
-                      <div className="flex items-center justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Zone</span>
                         <span className="text-sm font-medium">
-                          {sensor.zone?.name || 'Unassigned'}
+                          {sensor.zone}
                         </span>
                       </div>
 
@@ -185,14 +168,12 @@ export default function DataDisplay() {
                         </span>
                       </div>
 
-                      {latestReading && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Last Update</span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatTimestamp(latestReading.timestamp)}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Last Update</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimestamp(sensor.lastReading)}
+                        </span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -252,7 +233,7 @@ export default function DataDisplay() {
                   <div>
                     <p className="text-sm text-muted-foreground">Zones Covered</p>
                     <p className="text-2xl font-bold">
-                      {new Set(sensors.map(s => s.zone?.id).filter(Boolean)).size}
+                      {new Set(sensors.map(s => s.zone).filter(Boolean)).size}
                     </p>
                   </div>
                   <Droplets className="h-8 w-8 text-blue-500" />

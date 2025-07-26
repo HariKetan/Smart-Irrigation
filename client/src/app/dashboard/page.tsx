@@ -1,69 +1,97 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
-import { Droplets, Gauge, AlertTriangle, Power, MapPin, ChevronRight, Activity, Thermometer, CheckCircle } from "lucide-react"
-import { getApiBaseUrl } from "@/lib/api"
-import { getMoistureStatus, calculateAverage, formatNumber } from "@/lib/utils"
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import {
+  Droplets,
+  Gauge,
+  AlertTriangle,
+  Power,
+  MapPin,
+  ChevronRight,
+  Activity,
+  CheckCircle,
+} from "lucide-react";
+import { getApiBaseUrl } from "@/lib/api";
+import { getMoistureStatus, calculateAverage, formatNumber } from "@/lib/utils";
 
 interface Section {
-  id: number
-  name: string
-  crop: string
-  moisture: number
-  threshold: number
-  temperature: number
-  waterUsed: number
-  valveOpen: boolean
-  area: number
-  location: string
-  lastIrrigation: string
-  nextIrrigation: string
+  id: number;
+  name: string;
+  crop: string;
+  moisture: number;
+  threshold: number;
+  waterUsed: number;
+  valveOpen: boolean;
+  area: number;
+  location: string;
+  lastIrrigation: string;
+  nextIrrigation: string;
+}
+
+interface MoistureReading {
+  id: number;
+  farmer_id: number;
+  section_id: number;
+  value: number;
+  timestamp: string;
 }
 
 export default function DashboardPage() {
-  const router = useRouter()
-  const [sections, setSections] = useState<Section[]>([])
-  const [loading, setLoading] = useState(true)
-  const [totalWaterUsed, setTotalWaterUsed] = useState(0)
-  const [activeValves, setActiveValves] = useState(0)
+  const router = useRouter();
+  const [sections, setSections] = useState<Section[]>([]);
+  const [latestReadings, setLatestReadings] = useState<MoistureReading[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalWaterUsed, setTotalWaterUsed] = useState(0);
+  const [activeValves, setActiveValves] = useState(0);
 
   const fetchSections = async () => {
     try {
-      const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/sections`)
-      
-      if (response.ok) {
-        const data = await response.json()
-        setSections(data)
+      const apiBaseUrl = getApiBaseUrl();
+      const [sectionsResponse, readingsResponse] = await Promise.all([
+        fetch(`${apiBaseUrl}/api/real/sections`),
+        fetch(`${apiBaseUrl}/api/real/moisture-readings/latest`),
+      ]);
+
+      if (sectionsResponse.ok && readingsResponse.ok) {
+        const sectionsData = await sectionsResponse.json();
+        const readingsData = await readingsResponse.json();
+        setSections(sectionsData);
+        setLatestReadings(readingsData);
       } else {
-        console.error('Failed to fetch sections')
+        console.error("Failed to fetch data");
       }
     } catch (error) {
-      console.error('Error fetching sections:', error)
+      console.error("Error fetching data:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchSections()
-  }, [])
+    fetchSections();
+  }, []);
 
   useEffect(() => {
-    const total = sections.reduce((sum, section) => sum + section.waterUsed, 0)
-    const active = sections.filter((section) => section.valveOpen).length
-    setTotalWaterUsed(total)
-    setActiveValves(active)
-  }, [sections])
+    const total = sections.reduce((sum, section) => sum + section.waterUsed, 0);
+    const active = sections.filter((section) => section.valveOpen).length;
+    setTotalWaterUsed(total);
+    setActiveValves(active);
+  }, [sections]);
 
   const handleSectionSelect = (sectionId: number) => {
-    router.push(`/section-detail/${sectionId}`)
-  }
+    router.push(`/section-detail/${sectionId}`);
+  };
 
   if (loading) {
     return (
@@ -73,7 +101,7 @@ export default function DashboardPage() {
           <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -81,9 +109,16 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-2xl md:text-3xl font-bold">Smart Irrigation Control</h1>
-          <p className="text-sm text-muted-foreground">Monitor and control your farm's irrigation system</p>
-          <Badge variant="outline" className="flex items-center gap-1 w-fit mx-auto">
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Smart Irrigation Control
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Monitor and control your farm's irrigation system
+          </p>
+          <Badge
+            variant="outline"
+            className="flex items-center gap-1 w-fit mx-auto"
+          >
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             System Online
           </Badge>
@@ -94,10 +129,14 @@ export default function DashboardPage() {
           <Card>
             <CardContent className="p-3 md:p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs md:text-sm font-medium">Total Water</span>
+                <span className="text-xs md:text-sm font-medium">
+                  Total Water
+                </span>
                 <Droplets className="h-4 w-4 text-blue-500" />
               </div>
-              <div className="text-lg md:text-2xl font-bold">{formatNumber(totalWaterUsed)}L</div>
+              <div className="text-lg md:text-2xl font-bold">
+                {formatNumber(totalWaterUsed)}L
+              </div>
               <p className="text-xs text-muted-foreground">Today</p>
             </CardContent>
           </Card>
@@ -105,7 +144,9 @@ export default function DashboardPage() {
           <Card>
             <CardContent className="p-3 md:p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs md:text-sm font-medium">Active Valves</span>
+                <span className="text-xs md:text-sm font-medium">
+                  Active Valves
+                </span>
                 <Power className="h-4 w-4 text-green-500" />
               </div>
               <div className="text-lg md:text-2xl font-bold">
@@ -118,26 +159,37 @@ export default function DashboardPage() {
           <Card>
             <CardContent className="p-3 md:p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs md:text-sm font-medium">Avg Moisture</span>
+                <span className="text-xs md:text-sm font-medium">
+                  Avg Moisture
+                </span>
                 <Gauge className="h-4 w-4 text-orange-500" />
               </div>
               <div className="text-lg md:text-2xl font-bold">
-                {sections.length > 0 ? calculateAverage(sections.map(s => s.moisture)) : 0}%
+                {latestReadings.length > 0
+                  ? calculateAverage(
+                      latestReadings.map((r) => r.value)
+                    ).toFixed(1)
+                  : sections.length > 0
+                  ? calculateAverage(sections.map((s) => s.moisture))
+                  : 0}
+                %
               </div>
-              <p className="text-xs text-muted-foreground">All sections</p>
+              <p className="text-xs text-muted-foreground">All sensors</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-3 md:p-6">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs md:text-sm font-medium">Alerts</span>
-                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <span className="text-xs md:text-sm font-medium">
+                  Active Sensors
+                </span>
+                <Activity className="h-4 w-4 text-green-500" />
               </div>
               <div className="text-lg md:text-2xl font-bold">
-                {sections.filter((s) => s.moisture < s.threshold).length}
+                {latestReadings.length}
               </div>
-              <p className="text-xs text-muted-foreground">Need attention</p>
+              <p className="text-xs text-muted-foreground">Reporting</p>
             </CardContent>
           </Card>
         </div>
@@ -147,7 +199,10 @@ export default function DashboardPage() {
           <h2 className="text-lg md:text-xl font-semibold">Farm Sections</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {sections.map((section) => {
-              const moistureStatus = getMoistureStatus(section.moisture, section.threshold)
+              const moistureStatus = getMoistureStatus(
+                section.moisture,
+                section.threshold
+              );
               return (
                 <Card
                   key={section.id}
@@ -159,12 +214,19 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-black dark:text-black" />
                         <div>
-                          <CardTitle className="text-base md:text-lg text-black dark:text-black">{section.name}</CardTitle>
-                          <CardDescription className="text-sm text-black dark:text-black">{section.crop}</CardDescription>
+                          <CardTitle className="text-base md:text-lg text-black dark:text-black">
+                            {section.name}
+                          </CardTitle>
+                          <CardDescription className="text-sm text-black dark:text-black">
+                            {section.crop}
+                          </CardDescription>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={moistureStatus.color as any} className="text-xs ">
+                        <Badge
+                          variant={moistureStatus.color as any}
+                          className="text-xs "
+                        >
                           {moistureStatus.status}
                         </Badge>
                         <ChevronRight className="h-4 w-4 text-black dark:text-black" />
@@ -183,37 +245,44 @@ export default function DashboardPage() {
                       <div className="text-xs text-muted-foreground dark:text-black">
                         Target: {section.threshold}% •{" "}
                         {section.moisture < section.threshold
-                          ? `${section.threshold - section.moisture}% below target`
+                          ? `${
+                              section.threshold - section.moisture
+                            }% below target`
                           : "Above target"}
                       </div>
                     </div>
 
                     {/* Quick Stats */}
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-center gap-1">
-                          <Thermometer className="h-3 w-3 text-orange-500 dark:text-orange-500" />
-                          <span className="text-xs text-black dark:text-black">Temp</span>
-                        </div>
-                        <div className="text-sm font-medium text-black dark:text-black">{section.temperature}°C</div>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2 text-center">
                       <div className="space-y-1">
                         <div className="flex items-center justify-center gap-1">
                           <Droplets className="h-3 w-3 text-blue-500 dark:text-blue-500" />
-                          <span className="text-xs text-black dark:text-black">Used</span>
+                          <span className="text-xs text-black dark:text-black">
+                            Used
+                          </span>
                         </div>
-                        <div className="text-sm font-medium text-black dark:text-black">{formatNumber(section.waterUsed)}L</div>
+                        <div className="text-sm font-medium text-black dark:text-black">
+                          {formatNumber(section.waterUsed)}L
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center justify-center gap-1">
                           <Activity className="h-3 w-3 text-green-500 dark:text-green-500" />
-                          <span className="text-xs text-black dark:text-black">Status</span>
+                          <span className="text-xs text-black dark:text-black">
+                            Status
+                          </span>
                         </div>
                         <div className="flex items-center justify-center gap-1">
                           <div
-                            className={`w-2 h-2 rounded-full ${section.valveOpen ? "bg-green-500 dark:bg-green-500" : "bg-gray-400 dark:bg-gray-400"}`}
+                            className={`w-2 h-2 rounded-full ${
+                              section.valveOpen
+                                ? "bg-green-500 dark:bg-green-500"
+                                : "bg-gray-400 dark:bg-gray-400"
+                            }`}
                           ></div>
-                          <span className="text-xs text-black dark:text-black">{section.valveOpen ? "ON" : "OFF"}</span>
+                          <span className="text-xs text-black dark:text-black">
+                            {section.valveOpen ? "ON" : "OFF"}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -225,9 +294,12 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-3">
                             <AlertTriangle className="h-5 w-5 text-orange-600" />
                             <div>
-                              <div className="font-medium text-orange-800">Action Required</div>
+                              <div className="font-medium text-orange-800">
+                                Action Required
+                              </div>
                               <div className="text-sm text-orange-700">
-                                Soil moisture is below the set threshold. Consider starting irrigation.
+                                Soil moisture is below the set threshold.
+                                Consider starting irrigation.
                               </div>
                             </div>
                           </div>
@@ -239,8 +311,12 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-3">
                             <CheckCircle className="h-5 w-5 text-green-600" />
                             <div>
-                              <div className="font-medium text-green-800">Optimal Conditions</div>
-                              <div className="text-sm text-green-700">Soil moisture level is within the optimal range.</div>
+                              <div className="font-medium text-green-800">
+                                Optimal Conditions
+                              </div>
+                              <div className="text-sm text-green-700">
+                                Soil moisture level is within the optimal range.
+                              </div>
                             </div>
                           </div>
                         </CardContent>
@@ -248,9 +324,91 @@ export default function DashboardPage() {
                     )}
                   </CardContent>
                 </Card>
-              )
+              );
             })}
           </div>
+        </div>
+
+        {/* Latest Moisture Readings */}
+        <div className="space-y-3">
+          <h2 className="text-lg md:text-xl font-semibold">
+            Latest Moisture Readings
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+            {latestReadings.map((reading) => {
+              const moistureStatus = getMoistureStatus(reading.value, 60); // Using 60% as default threshold
+              return (
+                <Card
+                  key={reading.id}
+                  className="hover:shadow-md transition-shadow"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Droplets className="h-4 w-4 text-blue-500" />
+                        <div>
+                          <CardTitle className="text-base">
+                            Section {reading.section_id}
+                          </CardTitle>
+                          <CardDescription className="text-sm">
+                            Moisture Sensor
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={moistureStatus.color as any}
+                        className="text-xs"
+                      >
+                        {moistureStatus.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-3">
+                    {/* Moisture Value */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Moisture Level</span>
+                        <span className="font-bold">
+                          {reading.value.toFixed(1)}%
+                        </span>
+                      </div>
+                      <Progress value={reading.value} className="h-2" />
+                    </div>
+
+                    {/* Timestamp */}
+                    <div className="text-xs text-muted-foreground">
+                      Last updated:{" "}
+                      {new Date(reading.timestamp).toLocaleString()}
+                    </div>
+
+                    {/* Quick Action */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => handleSectionSelect(reading.section_id)}
+                    >
+                      View Section Details
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {latestReadings.length === 0 && (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Droplets className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">
+                  No Moisture Readings
+                </h3>
+                <p className="text-muted-foreground">
+                  No moisture readings are currently available.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Quick Actions */}
@@ -271,5 +429,5 @@ export default function DashboardPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

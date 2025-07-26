@@ -1,12 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import sensorsRouter from './routes/sensors';
-import readingsRouter from './routes/readings';
-import zonesRouter from './routes/zones';
-import sectionsRouter from './routes/sections';
-import valvesRouter from './routes/valves';
+
 import authRouter from './routes/auth';
+import realDataRouter from './routes/real-data';
 
 // Load environment variables
 dotenv.config();
@@ -24,12 +21,12 @@ app.get('/', (req, res) => {
 });
 
 // API routes
-app.use('/api/sensors', sensorsRouter);
-app.use('/api/readings', readingsRouter);
-app.use('/api/zones', zonesRouter);
-app.use('/api/sections', sectionsRouter);
-app.use('/api/valves', valvesRouter);
+// app.use('/api/sensors', sensorsRouter);
+// app.use('/api/readings', readingsRouter);
+// app.use('/api/sections', sectionsRouter);
+// app.use('/api/valves', valvesRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/real', realDataRouter);
 
 // Sample API routes (keeping for backward compatibility)
 app.get('/api/health', (req, res) => {

@@ -4,41 +4,33 @@ import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MapPin, Activity, Droplets, Thermometer, Gauge } from "lucide-react"
+import { MapPin, Activity, Droplets, Gauge } from "lucide-react"
 import { Loader } from "@googlemaps/js-api-loader"
 import { getApiBaseUrl } from "@/lib/api"
 
 interface Sensor {
-  id: number
+  id: string
   name: string
-  type: 'MOISTURE' | 'PH' | 'NUTRIENT' | 'WATER_FLOW'
+  type: 'MOISTURE' | 'WATER_FLOW'
+  value: number
+  unit: string
+  zone: string
+  status: string
   location: string
+  lastReading: string
   isActive: boolean
-  zoneId?: number
-  zone?: {
-    id: number
-    name: string
-  }
-  readings?: {
-    id: number
-    value: number
-    unit: string
-    timestamp: string
-  }[]
+  zoneId: number
 }
 
 interface Valve {
-  id: number
+  id: string
   name: string
   isOpen: boolean
   flowRate: number
   location: string
   isActive: boolean
-  zoneId?: number
-  zone?: {
-    id: number
-    name: string
-  }
+  zoneId: number
+  updatedAt: string
 }
 
 // Farm boundary coordinates (dotted box)
@@ -107,8 +99,8 @@ export default function MapPage() {
       try {
         const apiBaseUrl = getApiBaseUrl()
         const [sensorsResponse, valvesResponse] = await Promise.all([
-          fetch(`${apiBaseUrl}/api/sensors`),
-          fetch(`${apiBaseUrl}/api/valves`)
+          fetch(`${apiBaseUrl}/api/real/sensors`),
+          fetch(`${apiBaseUrl}/api/real/valves`)
         ])
 
         if (sensorsResponse.ok && valvesResponse.ok) {
@@ -250,14 +242,13 @@ export default function MapPage() {
             marker.addListener("click", () => {
               setSelectedSensor(sensor)
               if (infoWindowRef.current) {
-                const latestReading = sensor.readings?.[0]
                 infoWindowRef.current.setContent(`
                   <div style="padding: 8px; min-width: 200px;">
                     <h3 style="margin: 0 0 8px 0; font-weight: bold;">${sensor.name}</h3>
                     <p style="margin: 4px 0; font-size: 14px;">Type: ${sensor.type}</p>
-                    <p style="margin: 4px 0; font-size: 14px;">Value: ${latestReading ? `${latestReading.value} ${latestReading.unit}` : 'No data'}</p>
+                    <p style="margin: 4px 0; font-size: 14px;">Value: ${sensor.value} ${sensor.unit}</p>
                     <p style="margin: 4px 0; font-size: 14px;">Status: ${sensor.isActive ? 'Active' : 'Inactive'}</p>
-                    <p style="margin: 4px 0; font-size: 12px; color: #666;">Zone: ${sensor.zone?.name || 'Unassigned'}</p>
+                    <p style="margin: 4px 0; font-size: 12px; color: #666;">Zone: ${sensor.zone}</p>
                   </div>
                 `)
                 infoWindowRef.current.open(map, marker)
@@ -306,7 +297,7 @@ export default function MapPage() {
                     <h3 style="margin: 0 0 8px 0; font-weight: bold;">${valve.name}</h3>
                     <p style="margin: 4px 0; font-size: 14px;">Status: ${valve.isOpen ? 'Open' : 'Closed'}</p>
                     <p style="margin: 4px 0; font-size: 14px;">Flow Rate: ${valve.flowRate} L/min</p>
-                    <p style="margin: 4px 0; font-size: 12px; color: #666;">Zone: ${valve.zone?.name || 'Unassigned'}</p>
+                    <p style="margin: 4px 0; font-size: 12px; color: #666;">Zone: ${valve.zoneId || idx + 1}</p>
                   </div>
                 `)
                 infoWindowRef.current.open(map, marker)
@@ -444,15 +435,15 @@ export default function MapPage() {
                       <div>
                         <p className="text-sm text-muted-foreground">Current Value</p>
                         <p className="text-lg font-semibold">
-                          {selectedSensor.readings?.[0] 
-                            ? `${selectedSensor.readings[0].value} ${selectedSensor.readings[0].unit}`
+                          {selectedSensor.value 
+                            ? `${selectedSensor.value} ${selectedSensor.unit}`
                             : 'No data'
                           }
                         </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Zone</p>
-                        <p className="text-sm">{selectedSensor.zone?.name || 'Unassigned'}</p>
+                        <p className="text-sm">{selectedSensor.zone}</p>
                       </div>
                     </div>
                     <Button
@@ -483,7 +474,7 @@ export default function MapPage() {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Zone</p>
-                        <p className="text-sm">{selectedValve.zone?.name || 'Unassigned'}</p>
+                        <p className="text-sm">{selectedValve.zoneId || 'N/A'}</p>
                       </div>
                     </div>
                     <Button

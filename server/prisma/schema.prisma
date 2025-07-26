@@ -14,64 +14,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Sensor {
-  id          Int       @id @default(autoincrement())
-  name        String
-  type        SensorType
-  location    String
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  readings    Reading[]
-  zone        Zone?     @relation(fields: [zoneId], references: [id])
-  zoneId      Int?
 
-  @@map("sensors")
-}
-
-model Reading {
-  id        Int      @id @default(autoincrement())
-  value     Float
-  unit      String
-  timestamp DateTime @default(now())
-  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
-  sensorId  Int
-
-  @@map("readings")
-}
-
-model Zone {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?
-  area        Float    // in square meters
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  sensors     Sensor[]
-  valves      Valve[]
-
-  @@map("zones")
-}
-
-model Valve {
-  id          Int      @id @default(autoincrement())
-  name        String
-  isOpen      Boolean  @default(false)
-  flowRate    Float    @default(0) // in L/min
-  location    String   // GPS coordinates or location description
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  zone        Zone?    @relation(fields: [zoneId], references: [id])
-  zoneId      Int?
-
-  @@map("valves")
-}
 
 model IrrigationSchedule {
   id          Int      @id @default(autoincrement())
-  zoneId      Int
   startTime   DateTime
   duration    Int      // in minutes
   frequency   String   // daily, weekly, etc.
@@ -136,3 +82,46 @@ model VerificationToken {
 
   @@unique([identifier, token])
 } 
+
+model MoistureReading {
+  id         Int      @id @default(autoincrement())
+  farmer_id  Int
+  section_id Int
+  value      Float
+  timestamp  DateTime @default(now())
+
+  @@map("moisture_readings")
+}
+
+model IrrigationEvent {
+  id         Int      @id @default(autoincrement())
+  farmer_id  Int
+  section_id Int
+  water_ml   Float
+  start_time DateTime
+  end_time   DateTime
+
+  @@map("irrigation_events")
+}
+
+model DeviceStatus {
+  id          Int      @id @default(autoincrement())
+  device_id   String?
+  farmer_id   Int
+  section_id  Int
+  status_json Json
+  timestamp   DateTime @default(now())
+
+  @@map("device_status")
+}
+
+model DeviceAck {
+  id         Int      @id @default(autoincrement())
+  device_id  String?
+  farmer_id  Int
+  section_id Int
+  ack_json   Json
+  timestamp  DateTime @default(now())
+
+  @@map("device_acks")
+}

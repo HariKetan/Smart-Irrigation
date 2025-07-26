@@ -1,150 +1,111 @@
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '../src/generated/prisma'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
 async function main() {
-  console.log('Seeding database...');
+  console.log('Starting database seeding...')
 
-  // Create zones
-  const zones = await Promise.all([
-    prisma.zone.create({
+  // Create sensors directly (no zones)
+  const sensors = await Promise.all([
+    prisma.sensor.create({
       data: {
-        name: 'Zone 1',
-        description: 'Corn Field',
-        area: 2500,
-        isActive: true,
-      },
-    }),
-    prisma.zone.create({
-      data: {
-        name: 'Zone 2',
-        description: 'Wheat Field',
-        area: 3000,
-        isActive: true,
-      },
-    }),
-    prisma.zone.create({
-      data: {
-        name: 'Zone 3',
-        description: 'Vegetable Garden',
-        area: 1500,
-        isActive: true,
-      },
-    }),
-    prisma.zone.create({
-      data: {
-        name: 'Zone 4',
-        description: 'Fruit Orchard',
-        area: 2000,
-        isActive: true,
-      },
-    }),
-  ]);
-
-  console.log('Created zones:', zones.length);
-
-  // Create sensors for each zone
-  const sensors = [];
-  for (let i = 0; i < zones.length; i++) {
-    const zone = zones[i];
-    
-    // Define GPS coordinates for each zone's moisture sensor
-    const zoneCoordinates = [
-      {
-        moisture: '12.9232000,77.5017000'
-      },
-      {
-        moisture: '12.9232200,77.5019000'
-      },
-      {
-        moisture: '12.9230300,77.5019000'
-      },
-      {
-        moisture: '12.9230300,77.5017000'
-      }
-    ];
-
-    const coords = zoneCoordinates[i]; // Use loop index directly
-
-    // Moisture sensor
-    const moistureSensor = await prisma.sensor.create({
-      data: {
-        name: `Moisture Sensor ${zone.id}`,
+        name: 'Moisture Sensor 1',
         type: 'MOISTURE',
-        location: coords.moisture,
-        isActive: true,
-        zoneId: zone.id,
-      },
-    });
+        location: '12.9232,77.5017',
+        isActive: true
+      }
+    }),
+    prisma.sensor.create({
+      data: {
+        name: 'Moisture Sensor 2',
+        type: 'MOISTURE',
+        location: '12.9235,77.5020',
+        isActive: true
+      }
+    }),
+    prisma.sensor.create({
+      data: {
+        name: 'Moisture Sensor 3',
+        type: 'MOISTURE',
+        location: '12.9238,77.5023',
+        isActive: true
+      }
+    }),
+    prisma.sensor.create({
+      data: {
+        name: 'Moisture Sensor 4',
+        type: 'MOISTURE',
+        location: '12.9241,77.5026',
+        isActive: true
+      }
+    })
+  ])
 
-    sensors.push(moistureSensor);
+  console.log('Created sensors:', sensors.length)
 
-    // Create readings for the moisture sensor
+  // Create readings for each sensor
+  for (const sensor of sensors) {
     await prisma.reading.create({
       data: {
-        sensorId: moistureSensor.id,
-        value: Math.floor(Math.random() * 30) + 40, // 40-70%
+        sensorId: sensor.id,
+        value: Math.random() * 100,
         unit: '%',
-      },
-    });
+        timestamp: new Date()
+      }
+    })
   }
 
-  console.log('Created sensors:', sensors.length);
+  console.log('Created readings for all sensors')
 
-  // Create valves for each zone
+  // Create valves directly (no zones)
   const valves = await Promise.all([
     prisma.valve.create({
       data: {
         name: 'Valve 1',
-        isOpen: Math.random() > 0.7,
-        flowRate: Math.random() * 5 + 1,
-        location: '12.9232000,77.5017000',
-        isActive: true,
-        zoneId: zones[0].id,
-      },
+        isOpen: false,
+        flowRate: 0,
+        location: '12.9232,77.5017',
+        isActive: true
+      }
     }),
     prisma.valve.create({
       data: {
         name: 'Valve 2',
-        isOpen: Math.random() > 0.7,
-        flowRate: Math.random() * 5 + 1,
-        location: '12.9232200,77.5019000',
-        isActive: true,
-        zoneId: zones[1].id,
-      },
+        isOpen: false,
+        flowRate: 0,
+        location: '12.9235,77.5020',
+        isActive: true
+      }
     }),
     prisma.valve.create({
       data: {
         name: 'Valve 3',
-        isOpen: Math.random() > 0.7,
-        flowRate: Math.random() * 5 + 1,
-        location: '12.9230300,77.5019000',
-        isActive: true,
-        zoneId: zones[2].id,
-      },
+        isOpen: false,
+        flowRate: 0,
+        location: '12.9238,77.5023',
+        isActive: true
+      }
     }),
     prisma.valve.create({
       data: {
         name: 'Valve 4',
-        isOpen: Math.random() > 0.7,
-        flowRate: Math.random() * 5 + 1,
-        location: '12.9230300,77.5017000',
-        isActive: true,
-        zoneId: zones[3].id,
-      },
-    }),
-  ]);
+        isOpen: false,
+        flowRate: 0,
+        location: '12.9241,77.5026',
+        isActive: true
+      }
+    })
+  ])
 
-  console.log('Created valves:', valves.length);
-
-  console.log('Database seeded successfully!');
+  console.log('Created valves:', valves.length)
+  console.log('Database seeding completed!')
 }
 
 main()
   .catch((e) => {
-    console.error(e);
-    process.exit(1);
+    console.error(e)
+    process.exit(1)
   })
   .finally(async () => {
-    await prisma.$disconnect();
-  }); 
+    await prisma.$disconnect()
+  }) 
