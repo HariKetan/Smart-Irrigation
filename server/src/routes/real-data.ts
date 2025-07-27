@@ -282,7 +282,7 @@ router.get('/moisture-readings', async (req, res) => {
       page = 1, 
       limit = 100, 
       section_id, 
-      farmer_id,
+      farm_id,
       start_date,
       end_date 
     } = req.query;
@@ -301,10 +301,10 @@ router.get('/moisture-readings', async (req, res) => {
       paramIndex++;
     }
 
-    if (farmer_id) {
+    if (farm_id) {
       whereClause += whereClause ? ' AND ' : ' WHERE ';
-      whereClause += `farmer_id = $${paramIndex}`;
-      params.push(parseInt(farmer_id as string));
+      whereClause += `farm_id = $${paramIndex}`;
+      params.push(parseInt(farm_id as string));
       paramIndex++;
     }
 
@@ -331,7 +331,7 @@ router.get('/moisture-readings', async (req, res) => {
     const dataQuery = `
       SELECT 
         id::int as id,
-        farmer_id::int as farmer_id,
+        farm_id::int as farm_id,
         section_id::int as section_id,
         value::float as value,
         timestamp
@@ -362,20 +362,20 @@ router.get('/moisture-readings', async (req, res) => {
 // Get latest moisture reading for each section
 router.get('/moisture-readings/latest', async (req, res) => {
   try {
-    const { farmer_id } = req.query;
+    const { farm_id } = req.query;
     
     let whereClause = '';
     const params: any[] = [];
     
-    if (farmer_id) {
-      whereClause = ' WHERE farmer_id = $1';
-      params.push(parseInt(farmer_id as string));
+    if (farm_id) {
+      whereClause = ' WHERE farm_id = $1';
+      params.push(parseInt(farm_id as string));
     }
 
     const query = `
       SELECT 
         id::int as id,
-        farmer_id::int as farmer_id,
+        farm_id::int as farm_id,
         section_id::int as section_id,
         value::float as value,
         timestamp
@@ -399,7 +399,7 @@ router.get('/moisture-readings/latest', async (req, res) => {
 // Get moisture readings statistics
 router.get('/moisture-readings/stats', async (req, res) => {
   try {
-    const { section_id, farmer_id, days = 7 } = req.query;
+    const { section_id, farm_id, days = 7 } = req.query;
     
     let whereClause = ' WHERE timestamp >= NOW() - INTERVAL \'1 day\' * $1';
     const params: any[] = [parseInt(days as string)];
@@ -411,9 +411,9 @@ router.get('/moisture-readings/stats', async (req, res) => {
       paramIndex++;
     }
 
-    if (farmer_id) {
-      whereClause += ` AND farmer_id = $${paramIndex}`;
-      params.push(parseInt(farmer_id as string));
+    if (farm_id) {
+      whereClause += ` AND farm_id = $${paramIndex}`;
+      params.push(parseInt(farm_id as string));
       paramIndex++;
     }
 
@@ -458,6 +458,238 @@ router.get('/sections/:id/irrigation', async (req, res) => {
   } catch (error) {
     console.error('Error fetching irrigation events:', error);
     res.status(500).json({ error: 'Failed to fetch irrigation events' });
+  }
+});
+
+// Get all irrigation events from irrigation_events table
+router.get('/irrigation-events', async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 100, 
+      section_id, 
+      farm_id,
+      start_date,
+      end_date 
+    } = req.query;
+
+    const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+    
+    // Build WHERE clause based on filters
+    let whereClause = '';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (section_id) {
+      whereClause += whereClause ? ' AND ' : ' WHERE ';
+      whereClause += `section_id = $${paramIndex}`;
+      params.push(parseInt(section_id as string));
+      paramIndex++;
+    }
+
+    if (farm_id) {
+      whereClause += whereClause ? ' AND ' : ' WHERE ';
+      whereClause += `farm_id = $${paramIndex}`;
+      params.push(parseInt(farm_id as string));
+      paramIndex++;
+    }
+
+    if (start_date) {
+      whereClause += whereClause ? ' AND ' : ' WHERE ';
+      whereClause += `start_time >= $${paramIndex}`;
+      params.push(start_date as string);
+      paramIndex++;
+    }
+
+    if (end_date) {
+      whereClause += whereClause ? ' AND ' : ' WHERE ';
+      whereClause += `start_time <= $${paramIndex}`;
+      params.push(end_date as string);
+      paramIndex++;
+    }
+
+    // Get total count for pagination
+    const countQuery = `SELECT COUNT(*) as total FROM irrigation_events${whereClause}`;
+    const countResult = await prisma.$queryRawUnsafe(countQuery, ...params);
+    const total = parseInt((countResult as any[])[0].total);
+
+    // Get paginated data
+    const dataQuery = `
+      SELECT 
+        id::int as id,
+        farm_id::int as farm_id,
+        section_id::int as section_id,
+        water_ml::float as water_ml,
+        start_time,
+        end_time,
+        EXTRACT(EPOCH FROM (end_time - start_time))::float as duration_seconds
+      FROM irrigation_events
+      ${whereClause}
+      ORDER BY start_time DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    
+    params.push(parseInt(limit as string), offset);
+    const events = await prisma.$queryRawUnsafe(dataQuery, ...params);
+
+    res.json({
+      data: events,
+      pagination: {
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit as string))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching irrigation events:', error);
+    res.status(500).json({ error: 'Failed to fetch irrigation events' });
+  }
+});
+
+// Get latest irrigation event for each section
+router.get('/irrigation-events/latest', async (req, res) => {
+  try {
+    const { farm_id } = req.query;
+    
+    let whereClause = '';
+    const params: any[] = [];
+    
+    if (farm_id) {
+      whereClause = ' WHERE farm_id = $1';
+      params.push(parseInt(farm_id as string));
+    }
+
+    const query = `
+      SELECT 
+        id::int as id,
+        farm_id::int as farm_id,
+        section_id::int as section_id,
+        water_ml::float as water_ml,
+        start_time,
+        end_time,
+        EXTRACT(EPOCH FROM (end_time - start_time))::float as duration_seconds
+      FROM irrigation_events 
+      WHERE (section_id, start_time) IN (
+        SELECT section_id, MAX(start_time) 
+        FROM irrigation_events${whereClause}
+        GROUP BY section_id
+      )
+      ORDER BY section_id
+    `;
+
+    const latestEvents = await prisma.$queryRawUnsafe(query, ...params);
+    res.json(latestEvents);
+  } catch (error) {
+    console.error('Error fetching latest irrigation events:', error);
+    res.status(500).json({ error: 'Failed to fetch latest irrigation events' });
+  }
+});
+
+// Get irrigation events statistics
+router.get('/irrigation-events/stats', async (req, res) => {
+  try {
+    const { section_id, farm_id, days = 7 } = req.query;
+    
+    let whereClause = ' WHERE start_time >= NOW() - INTERVAL \'1 day\' * $1';
+    const params: any[] = [parseInt(days as string)];
+    let paramIndex = 2;
+
+    if (section_id) {
+      whereClause += ` AND section_id = $${paramIndex}`;
+      params.push(parseInt(section_id as string));
+      paramIndex++;
+    }
+
+    if (farm_id) {
+      whereClause += ` AND farm_id = $${paramIndex}`;
+      params.push(parseInt(farm_id as string));
+      paramIndex++;
+    }
+
+    const statsQuery = `
+      SELECT 
+        COUNT(*)::int as total_events,
+        COALESCE(SUM(water_ml) / 1000.0, 0)::float as total_water_liters,
+        COALESCE(AVG(water_ml) / 1000.0, 0)::float as avg_water_per_event,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (end_time - start_time))), 0)::float as avg_duration_seconds,
+        COALESCE(SUM(EXTRACT(EPOCH FROM (end_time - start_time))) / 3600.0, 0)::float as total_hours_irrigated
+      FROM irrigation_events
+      ${whereClause}
+    `;
+
+    const stats = await prisma.$queryRawUnsafe(statsQuery, ...params);
+    res.json((stats as any[])[0]);
+  } catch (error) {
+    console.error('Error fetching irrigation events stats:', error);
+    res.status(500).json({ error: 'Failed to fetch irrigation events stats' });
+  }
+});
+
+// Get daily water usage for the last N days
+router.get('/irrigation-events/daily-usage', async (req, res) => {
+  try {
+    const { farm_id, days = 7 } = req.query;
+    
+    let whereClause = ' WHERE start_time >= NOW() - INTERVAL \'1 day\' * $1';
+    const params: any[] = [parseInt(days as string)];
+
+    if (farm_id) {
+      whereClause += ' AND farm_id = $2';
+      params.push(parseInt(farm_id as string));
+    }
+
+    const dailyUsageQuery = `
+      SELECT 
+        DATE(start_time) as date,
+        COALESCE(SUM(water_ml) / 1000.0, 0)::float as water_liters,
+        COUNT(*)::int as event_count,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (end_time - start_time))) / 60.0, 0)::float as avg_duration_minutes
+      FROM irrigation_events
+      ${whereClause}
+      GROUP BY DATE(start_time)
+      ORDER BY date DESC
+    `;
+
+    const dailyUsage = await prisma.$queryRawUnsafe(dailyUsageQuery, ...params);
+    res.json(dailyUsage);
+  } catch (error) {
+    console.error('Error fetching daily water usage:', error);
+    res.status(500).json({ error: 'Failed to fetch daily water usage' });
+  }
+});
+
+// Get water usage by section for the last N days
+router.get('/irrigation-events/section-usage', async (req, res) => {
+  try {
+    const { farm_id, days = 7 } = req.query;
+    
+    let whereClause = ' WHERE start_time >= NOW() - INTERVAL \'1 day\' * $1';
+    const params: any[] = [parseInt(days as string)];
+
+    if (farm_id) {
+      whereClause += ' AND farm_id = $2';
+      params.push(parseInt(farm_id as string));
+    }
+
+    const sectionUsageQuery = `
+      SELECT 
+        section_id::int as section_id,
+        COALESCE(SUM(water_ml) / 1000.0, 0)::float as water_liters,
+        COUNT(*)::int as event_count,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (end_time - start_time))) / 60.0, 0)::float as avg_duration_minutes,
+        MAX(start_time) as last_irrigation
+      FROM irrigation_events
+      ${whereClause}
+      GROUP BY section_id
+      ORDER BY water_liters DESC
+    `;
+
+    const sectionUsage = await prisma.$queryRawUnsafe(sectionUsageQuery, ...params);
+    res.json(sectionUsage);
+  } catch (error) {
+    console.error('Error fetching section water usage:', error);
+    res.status(500).json({ error: 'Failed to fetch section water usage' });
   }
 });
 

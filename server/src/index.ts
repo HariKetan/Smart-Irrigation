@@ -29,21 +29,21 @@ app.use('/api/auth', authRouter);
 app.use('/api/real', realDataRouter);
 
 // Sample API routes (keeping for backward compatibility)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+// app.get('/api/health', (req, res) => {
+//   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// });
 
-app.get('/api/data', (req, res) => {
-  res.json({
-    message: 'Sample data from server',
-    data: [
-      { id: 1, name: 'Sensor 1', value: 25.5 },
-      { id: 2, name: 'Sensor 2', value: 30.2 },
-      { id: 3, name: 'Sensor 3', value: 28.7 },
-      { id: 4, name: 'Sensor 4', value: 28.7 }
-    ]
-  });
-});
+// app.get('/api/data', (req, res) => {
+//   res.json({
+//     message: 'Sample data from server',
+//     data: [
+//       { id: 1, name: 'Sensor 1', value: 25.5 },
+//       { id: 2, name: 'Sensor 2', value: 30.2 },
+//       { id: 3, name: 'Sensor 3', value: 28.7 },
+//       { id: 4, name: 'Sensor 4', value: 28.7 }
+//     ]
+//   });
+// });
 
 // Start server
 app.listen(Number(PORT), '0.0.0.0', () => {

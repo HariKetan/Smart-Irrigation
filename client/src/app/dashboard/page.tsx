@@ -29,9 +29,9 @@ interface Section {
   id: number;
   name: string;
   crop: string;
-  moisture: number;
-  threshold: number;
-  waterUsed: number;
+  moisture?: number;
+  threshold?: number;
+  waterUsed?: number;
   valveOpen: boolean;
   area: number;
   location: string;
@@ -41,9 +41,9 @@ interface Section {
 
 interface MoistureReading {
   id: number;
-  farmer_id: number;
+  farm_id: number;
   section_id: number;
-  value: number;
+  value?: number;
   timestamp: string;
 }
 
@@ -83,7 +83,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const total = sections.reduce((sum, section) => sum + section.waterUsed, 0);
+    const total = sections.reduce((sum, section) => sum + (section.waterUsed || 0), 0);
     const active = sections.filter((section) => section.valveOpen).length;
     setTotalWaterUsed(total);
     setActiveValves(active);
@@ -239,14 +239,14 @@ export default function DashboardPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm text-black dark:text-black">
                         <span>Soil Moisture</span>
-                        <span className="font-bold">{section.moisture}%</span>
+                        <span className="font-bold">{section.moisture || 0}%</span>
                       </div>
-                      <Progress value={section.moisture} className="h-2" />
+                      <Progress value={section.moisture || 0} className="h-2" />
                       <div className="text-xs text-muted-foreground dark:text-black">
-                        Target: {section.threshold}% •{" "}
-                        {section.moisture < section.threshold
+                        Target: {section.threshold || 60}% •{" "}
+                        {(section.moisture || 0) < (section.threshold || 60)
                           ? `${
-                              section.threshold - section.moisture
+                              (section.threshold || 60) - (section.moisture || 0)
                             }% below target`
                           : "Above target"}
                       </div>
@@ -288,7 +288,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Status Alert */}
-                    {section.moisture < section.threshold ? (
+                    {(section.moisture || 0) < (section.threshold || 60) ? (
                       <Card className="border-orange-200 bg-orange-50">
                         <CardContent className="pt-0">
                           <div className="flex items-center gap-3">
@@ -336,7 +336,7 @@ export default function DashboardPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {latestReadings.map((reading) => {
-              const moistureStatus = getMoistureStatus(reading.value, 60); // Using 60% as default threshold
+              const moistureStatus = getMoistureStatus(reading.value || 0, 60); // Using 60% as default threshold
               return (
                 <Card
                   key={reading.id}
@@ -369,10 +369,10 @@ export default function DashboardPage() {
                       <div className="flex justify-between text-sm">
                         <span>Moisture Level</span>
                         <span className="font-bold">
-                          {reading.value.toFixed(1)}%
+                          {reading.value?.toFixed(1) || 0}%
                         </span>
                       </div>
-                      <Progress value={reading.value} className="h-2" />
+                      <Progress value={reading.value || 0} className="h-2" />
                     </div>
 
                     {/* Timestamp */}

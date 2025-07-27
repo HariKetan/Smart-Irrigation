@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+
+model Admin {
+  admin_id       Int       @id @default(autoincrement())
+  admin_name     String
+  admin_password String
+  admin_phone    String?
+  admin_email    String   @unique
+  join_date      DateTime @default(now())
+
+  farmers        Farmer[]
+}
+
+model Farmer {
+  farmer_id       Int       @id @default(autoincrement())
+  farmer_name     String
+  farmer_password String
+  farmer_phone    String?
+  farmer_email    String   @unique
+  join_date       DateTime @default(now())
+  admin_id        Int?
+
+  admin           Admin?   @relation(fields: [admin_id], references: [admin_id])
+  farms           Farm[]
+}
+
+model Farm {
+  farm_id                 Int       @id @default(autoincrement())
+  farm_name               String
+  creation_date           DateTime  @default(now())
+  farmer_id               Int?
+  farm_size               Float?
+  farm_location_cordinates String[]
+  soil_type               String?
+
+  farmer                  Farmer?   @relation(fields: [farmer_id], references: [farmer_id])
+  sections                Section[]
+}
+
+model Section {
+  section_id     Int       @id @default(autoincrement())
+  farm_id        Int?
+  creation_date  DateTime  @default(now())
+  section_name   String    @default("section_name")
+
+  farm           Farm?     @relation(fields: [farm_id], references: [farm_id])
+  sectionDevices SectionDevice[]
+}
+
+model MoistureReading {
+  id           Int      @id @default(autoincrement())
+  farmer_id    Int
+  section_id   Int
+  value        Float
+  timestamp    DateTime @default(now())
+
+  @@map("moisture_readings")
+}
+
+model IrrigationEvent {
+  id           Int      @id @default(autoincrement())
+  farmer_id    Int
+  section_id   Int
+  water_ml     Float
+  start_time   DateTime
+  end_time     DateTime
+
+  @@map("irrigation_events")
+}
+
+model DeviceStatus {
+  id           Int      @id @default(autoincrement())
+  device_id    String?
+  farmer_id    Int
+  section_id   Int
+  status_json  Json
+  timestamp    DateTime @default(now())
+
+  @@map("device_status")
+}
+
+model DeviceAck {
+  id           Int      @id @default(autoincrement())
+  device_id    String?
+  farmer_id    Int
+  section_id   Int
+  ack_json     Json
+  timestamp    DateTime @default(now())
+
+  @@map("device_acks")
+}
+
+model IrrigationSchedule {
+  id          Int      @id @default(autoincrement())
+  startTime   DateTime
+  duration    Int
+  frequency   String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("irrigation_schedules")
+}

@@ -85,7 +85,7 @@ model VerificationToken {
 
 model MoistureReading {
   id         Int      @id @default(autoincrement())
-  farmer_id  Int
+  farm_id  Int
   section_id Int
   value      Float
   timestamp  DateTime @default(now())
@@ -95,7 +95,7 @@ model MoistureReading {
 
 model IrrigationEvent {
   id         Int      @id @default(autoincrement())
-  farmer_id  Int
+  farm_id  Int
   section_id Int
   water_ml   Float
   start_time DateTime
@@ -107,7 +107,7 @@ model IrrigationEvent {
 model DeviceStatus {
   id          Int      @id @default(autoincrement())
   device_id   String?
-  farmer_id   Int
+  farm_id   Int
   section_id  Int
   status_json Json
   timestamp   DateTime @default(now())
@@ -118,7 +118,7 @@ model DeviceStatus {
 model DeviceAck {
   id         Int      @id @default(autoincrement())
   device_id  String?
-  farmer_id  Int
+  farm_id  Int
   section_id Int
   ack_json   Json
   timestamp  DateTime @default(now())
