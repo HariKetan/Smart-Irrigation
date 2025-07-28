@@ -8,6 +8,8 @@ import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   ArrowLeft,
   Droplets,
@@ -21,7 +23,12 @@ import {
   Activity,
   TrendingUp,
   Calendar,
-  Zap
+  Zap,
+  Wifi,
+  Signal,
+  Thermometer,
+  Save,
+  RefreshCw
 } from 'lucide-react'
 import { getApiBaseUrl } from '@/lib/api'
 
@@ -43,6 +50,9 @@ interface Section {
   soilPh?: number
   plantingDate?: string
   expectedHarvest?: string
+  mode?: string
+  deviceStatus?: any
+  farm?: any
 }
 
 interface SectionUsage {
@@ -60,6 +70,13 @@ interface DailyUsage {
   avg_duration_minutes: number;
 }
 
+interface DeviceConfig {
+  threshold: number;
+  enableDeepSleep: boolean;
+  deepSleepDuration: number;
+  reportingInterval: number;
+}
+
 export default function SectionDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -69,6 +86,13 @@ export default function SectionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toggling, setToggling] = useState(false)
+  const [configuring, setConfiguring] = useState(false)
+  const [deviceConfig, setDeviceConfig] = useState<DeviceConfig>({
+    threshold: 40,
+    enableDeepSleep: false,
+    deepSleepDuration: 60,
+    reportingInterval: 60
+  })
 
   const sectionId = params.id as string
 
@@ -94,6 +118,16 @@ export default function SectionDetailPage() {
         setSection(sectionData)
         setSectionUsage(sectionUsageData || null)
         setDailyUsage(dailyData)
+
+        // Update device config from section data
+        if (sectionData.deviceStatus) {
+          setDeviceConfig({
+            threshold: sectionData.deviceStatus.threshold || 40,
+            enableDeepSleep: false, // Default values
+            deepSleepDuration: 60,
+            reportingInterval: 60
+          })
+        }
       } else {
         console.error('Failed to fetch section data')
       }
@@ -121,7 +155,10 @@ export default function SectionDetailPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ valveOpen: !section.valveOpen }),
+        body: JSON.stringify({ 
+          valveOpen: !section.valveOpen,
+          duration: 60 // 60 seconds default
+        }),
       })
 
       if (response.ok) {
@@ -137,8 +174,58 @@ export default function SectionDetailPage() {
     }
   }
 
+  const handleModeToggle = async () => {
+    if (!section) return
+    
+    try {
+      const newMode = section.mode === 'auto' ? 'manual' : 'auto'
+      const apiBaseUrl = getApiBaseUrl()
+      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/mode`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mode: newMode }),
+      })
+
+      if (response.ok) {
+        await fetchSection()
+      } else {
+        console.error('Failed to change mode')
+      }
+    } catch (error) {
+      console.error('Error changing mode:', error)
+    }
+  }
+
+  const handleConfigUpdate = async () => {
+    if (!section) return
+    
+    setConfiguring(true)
+    try {
+      const apiBaseUrl = getApiBaseUrl()
+      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(deviceConfig),
+      })
+
+      if (response.ok) {
+        await fetchSection()
+      } else {
+        console.error('Failed to update configuration')
+      }
+    } catch (error) {
+      console.error('Error updating configuration:', error)
+    } finally {
+      setConfiguring(false)
+    }
+  }
+
   const updateThreshold = (newThreshold: number) => {
-    setSection(prev => prev ? { ...prev, threshold: newThreshold } : null)
+    setDeviceConfig(prev => ({ ...prev, threshold: newThreshold }))
   }
 
   const getMoistureStatus = (moisture: number, threshold: number) => {
@@ -177,7 +264,7 @@ export default function SectionDetailPage() {
     )
   }
 
-  const moistureStatus = getMoistureStatus(section.moisture, section.threshold)
+  const moistureStatus = getMoistureStatus(section.moisture, deviceConfig.threshold)
 
   return (
     <div className="min-h-screen bg-background p-3 md:p-6">
@@ -199,6 +286,68 @@ export default function SectionDetailPage() {
           </div>
         </div>
 
+        {/* Device Status */}
+        {section.deviceStatus && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Device Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${section.deviceStatus.wifi ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <div>
+                    <div className="text-sm font-medium">WiFi</div>
+                    <div className="text-xs text-muted-foreground">
+                      {section.deviceStatus.wifi ? 'Connected' : 'Disconnected'}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${section.deviceStatus.mqtt ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <div>
+                    <div className="text-sm font-medium">MQTT</div>
+                    <div className="text-xs text-muted-foreground">
+                      {section.deviceStatus.mqtt ? 'Connected' : 'Disconnected'}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <div className="text-sm font-medium">Uptime</div>
+                    <div className="text-xs text-muted-foreground">
+                      {Math.round(section.deviceStatus.uptime / 1000 / 60)} minutes
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Thermometer className="h-4 w-4 text-orange-500" />
+                  <div>
+                    <div className="text-sm font-medium">Latest Moisture</div>
+                    <div className="text-xs text-muted-foreground">
+                      {section.deviceStatus.latest_moisture || 0}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {section.deviceStatus.last_error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    <div className="text-sm text-red-700">
+                      Last Error: {section.deviceStatus.last_error}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Main Status Card */}
         <Card className={`${moistureStatus.bgColor} transition-all duration-200`}>
           <CardHeader>
@@ -216,10 +365,10 @@ export default function SectionDetailPage() {
               </div>
               <Progress value={section.moisture} className="h-4 dark:text-black" />
               <div className="flex justify-between text-sm text-muted-foreground dark:text-black">
-                <span>Target: {section.threshold}%</span>
-                <span className={section.moisture < section.threshold ? "text-red-600 font-medium" : ""}>
-                  {section.moisture < section.threshold
-                    ? `${section.threshold - section.moisture}% below target`
+                <span>Target: {deviceConfig.threshold}%</span>
+                <span className={section.moisture < deviceConfig.threshold ? "text-red-600 font-medium" : ""}>
+                  {section.moisture < deviceConfig.threshold
+                    ? `${deviceConfig.threshold - section.moisture}% below target`
                     : "Above target"}
                 </span>
               </div>
@@ -259,14 +408,34 @@ export default function SectionDetailPage() {
               />
             </div>
 
+            {/* Mode Control */}
+            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-blue-500" />
+                  <span className="font-medium">Operation Mode</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {section.mode === 'auto' 
+                    ? 'Automatic irrigation based on moisture levels'
+                    : 'Manual control only'}
+                </p>
+              </div>
+              <Switch
+                checked={section.mode === 'auto'}
+                onCheckedChange={handleModeToggle}
+                className="data-[state=checked]:bg-blue-600 scale-125"
+              />
+            </div>
+
             {/* Threshold Setting */}
             <div className="space-y-4 p-4 bg-muted rounded-lg">
               <div className="flex justify-between items-center">
                 <label className="font-medium">Auto-irrigation Threshold</label>
-                <span className="text-lg font-bold text-blue-600">{section.threshold}%</span>
+                <span className="text-lg font-bold text-blue-600">{deviceConfig.threshold}%</span>
               </div>
               <Slider
-                value={[section.threshold]}
+                value={[deviceConfig.threshold]}
                 onValueChange={(value) => updateThreshold(value[0])}
                 max={100}
                 min={10}
@@ -290,11 +459,65 @@ export default function SectionDetailPage() {
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={() => updateThreshold(section.moisture + 5)}>
+              <Button variant="outline" onClick={handleModeToggle}>
                 <Settings className="h-4 w-4 mr-2" />
-                Auto-adjust
+                {section.mode === 'auto' ? 'Switch to Manual' : 'Switch to Auto'}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Device Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Device Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="deepSleep">Enable Deep Sleep</Label>
+                <Switch
+                  id="deepSleep"
+                  checked={deviceConfig.enableDeepSleep}
+                  onCheckedChange={(checked) => 
+                    setDeviceConfig(prev => ({ ...prev, enableDeepSleep: checked }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deepSleepDuration">Deep Sleep Duration (seconds)</Label>
+                <Input
+                  id="deepSleepDuration"
+                  type="number"
+                  value={deviceConfig.deepSleepDuration}
+                  onChange={(e) => 
+                    setDeviceConfig(prev => ({ ...prev, deepSleepDuration: parseInt(e.target.value) }))
+                  }
+                  min={10}
+                  max={3600}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reportingInterval">Reporting Interval (seconds)</Label>
+                <Input
+                  id="reportingInterval"
+                  type="number"
+                  value={deviceConfig.reportingInterval}
+                  onChange={(e) => 
+                    setDeviceConfig(prev => ({ ...prev, reportingInterval: parseInt(e.target.value) }))
+                  }
+                  min={10}
+                  max={3600}
+                />
+              </div>
+            </div>
+            <Button onClick={handleConfigUpdate} disabled={configuring} className="w-full">
+              <Save className="h-4 w-4 mr-2" />
+              {configuring ? 'Updating...' : 'Update Configuration'}
+            </Button>
           </CardContent>
         </Card>
 

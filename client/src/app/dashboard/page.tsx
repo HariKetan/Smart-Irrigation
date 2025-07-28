@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Droplets,
   Gauge,
@@ -22,6 +23,11 @@ import {
   Activity,
   CheckCircle,
   Settings,
+  Wifi,
+  Signal,
+  Clock,
+  Zap,
+  Thermometer,
 } from "lucide-react";
 import { getApiBaseUrl } from "@/lib/api";
 import { getMoistureStatus, calculateAverage, formatNumber } from "@/lib/utils";
@@ -38,6 +44,9 @@ interface Section {
   location: string;
   lastIrrigation: string;
   nextIrrigation: string;
+  mode?: string;
+  deviceStatus?: any;
+  farm?: any;
 }
 
 interface MoistureReading {
@@ -56,31 +65,69 @@ interface SectionUsage {
   last_irrigation: string;
 }
 
+interface DeviceStatus {
+  device_id: string;
+  section_id: number;
+  uptime: number;
+  wifi: boolean | number;
+  mqtt: boolean | number;
+  last_error: string;
+  valve_on?: number;
+  mode?: string;
+  latest_moisture?: number;
+  threshold?: number;
+  pulse_count?: number;
+  water_ml?: number;
+  timestamp: number;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
   const [latestReadings, setLatestReadings] = useState<MoistureReading[]>([]);
   const [sectionUsage, setSectionUsage] = useState<SectionUsage[]>([]);
+  const [deviceStatuses, setDeviceStatuses] = useState<DeviceStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalWaterUsed, setTotalWaterUsed] = useState(0);
   const [activeValves, setActiveValves] = useState(0);
+  const [systemStatus, setSystemStatus] = useState({
+    online: true,
+    wifiConnected: true,
+    mqttConnected: true,
+    lastError: ""
+  });
 
   const fetchSections = async () => {
     try {
       const apiBaseUrl = getApiBaseUrl();
-      const [sectionsResponse, readingsResponse, usageResponse] = await Promise.all([
+      const [sectionsResponse, readingsResponse, usageResponse, deviceStatusResponse] = await Promise.all([
         fetch(`${apiBaseUrl}/api/real/sections`),
         fetch(`${apiBaseUrl}/api/real/moisture-readings/latest`),
         fetch(`${apiBaseUrl}/api/real/irrigation-events/section-usage?days=7`),
+        fetch(`${apiBaseUrl}/api/real/device-status/irrigation`),
       ]);
 
-      if (sectionsResponse.ok && readingsResponse.ok && usageResponse.ok) {
+      if (sectionsResponse.ok && readingsResponse.ok && usageResponse.ok && deviceStatusResponse.ok) {
         const sectionsData = await sectionsResponse.json();
         const readingsData = await readingsResponse.json();
         const usageData = await usageResponse.json();
+        const deviceStatusData = await deviceStatusResponse.json();
+        
         setSections(sectionsData);
         setLatestReadings(readingsData);
         setSectionUsage(usageData);
+        setDeviceStatuses(deviceStatusData);
+
+        // Update system status based on device statuses
+        if (deviceStatusData.length > 0) {
+          const latestStatus = deviceStatusData[0];
+          setSystemStatus({
+            online: true,
+            wifiConnected: Boolean(latestStatus.wifi),
+            mqttConnected: Boolean(latestStatus.mqtt),
+            lastError: latestStatus.last_error || ""
+          });
+        }
       } else {
         console.error("Failed to fetch data");
       }
@@ -107,10 +154,63 @@ export default function DashboardPage() {
     router.push(`/section-detail/${sectionId}`);
   };
 
+  const handleValveToggle = async (sectionId: number, currentValveState: boolean) => {
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/valve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          valveOpen: !currentValveState,
+          duration: 60 // 60 seconds default
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh data
+        await fetchSections();
+      } else {
+        console.error('Failed to toggle valve');
+      }
+    } catch (error) {
+      console.error('Error toggling valve:', error);
+    }
+  };
+
+  const handleModeToggle = async (sectionId: number, currentMode: string) => {
+    try {
+      const newMode = currentMode === 'auto' ? 'manual' : 'auto';
+      const apiBaseUrl = getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/mode`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mode: newMode }),
+      });
+
+      if (response.ok) {
+        // Refresh data
+        await fetchSections();
+      } else {
+        console.error('Failed to change mode');
+      }
+    } catch (error) {
+      console.error('Error changing mode:', error);
+    }
+  };
+
   // Helper function to get water usage for a specific section
   const getSectionWaterUsage = (sectionId: number): number => {
     const usage = sectionUsage.find(u => u.section_id === sectionId);
     return usage ? usage.water_liters : 0;
+  };
+
+  // Helper function to get device status for a section
+  const getSectionDeviceStatus = (sectionId: number): DeviceStatus | null => {
+    return deviceStatuses.find(d => d.device_id === `irrigation_controller_1` && d.section_id === sectionId) || null;
   };
 
   if (loading) {
@@ -135,13 +235,29 @@ export default function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             Monitor and control your farm's irrigation system
           </p>
-          <Badge
-            variant="outline"
-            className="flex items-center gap-1 w-fit mx-auto"
-          >
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            System Online
-          </Badge>
+          <div className="flex items-center justify-center gap-4">
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1"
+            >
+              <div className={`w-2 h-2 rounded-full ${systemStatus.online ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              {systemStatus.online ? 'System Online' : 'System Offline'}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1"
+            >
+              <Wifi className={`h-3 w-3 ${systemStatus.wifiConnected ? 'text-green-500' : 'text-red-500'}`} />
+              {systemStatus.wifiConnected ? 'WiFi' : 'No WiFi'}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1"
+            >
+              <Signal className={`h-3 w-3 ${systemStatus.mqttConnected ? 'text-green-500' : 'text-red-500'}`} />
+              {systemStatus.mqttConnected ? 'MQTT' : 'No MQTT'}
+            </Badge>
+          </div>
         </div>
 
         {/* Overview Cards */}
@@ -157,7 +273,7 @@ export default function DashboardPage() {
               <div className="text-lg md:text-2xl font-bold">
                 {formatNumber(totalWaterUsed)}L
               </div>
-              <p className="text-xs text-muted-foreground">Today</p>
+              <p className="text-xs text-muted-foreground">Last 7 days</p>
             </CardContent>
           </Card>
 
@@ -223,6 +339,8 @@ export default function DashboardPage() {
                 section.moisture,
                 section.threshold
               );
+              const deviceStatus = getSectionDeviceStatus(section.id);
+              
               return (
                 <Card
                   key={section.id}
@@ -272,6 +390,32 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
+                    {/* Device Status */}
+                    {deviceStatus && (
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${deviceStatus.wifi ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <span className="text-black dark:text-black">WiFi</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className={`w-2 h-2 rounded-full ${deviceStatus.mqtt ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <span className="text-black dark:text-black">MQTT</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-black dark:text-black" />
+                          <span className="text-black dark:text-black">
+                            {Math.round(deviceStatus.uptime / 1000 / 60)}m
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Thermometer className="h-3 w-3 text-black dark:text-black" />
+                          <span className="text-black dark:text-black">
+                            {deviceStatus.latest_moisture || 0}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Quick Stats */}
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="space-y-1">
@@ -293,7 +437,7 @@ export default function DashboardPage() {
                           </span>
                         </div>
                         <div className="text-sm font-medium text-black dark:text-black">
-                          Auto
+                          {section.mode || 'Manual'}
                         </div>
                       </div>
                       <div className="space-y-1">
@@ -316,6 +460,34 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Quick Controls */}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={section.valveOpen ? "destructive" : "default"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleValveToggle(section.id, section.valveOpen);
+                        }}
+                        className="flex-1 text-xs"
+                      >
+                        <Power className="h-3 w-3 mr-1" />
+                        {section.valveOpen ? "Stop" : "Start"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleModeToggle(section.id, section.mode || 'manual');
+                        }}
+                        className="flex-1 text-xs"
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        {section.mode === 'auto' ? 'Auto' : 'Manual'}
+                      </Button>
                     </div>
 
                     {/* Status Alert */}
@@ -372,8 +544,6 @@ export default function DashboardPage() {
             </Card>
           )}
         </div>
-
-      
 
         {/* Quick Actions */}
         <Card>
