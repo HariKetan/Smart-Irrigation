@@ -45,10 +45,27 @@ interface Section {
   expectedHarvest?: string
 }
 
+interface SectionUsage {
+  section_id: number;
+  water_liters: number;
+  event_count: number;
+  avg_duration_minutes: number;
+  last_irrigation: string;
+}
+
+interface DailyUsage {
+  date: string;
+  water_liters: number;
+  event_count: number;
+  avg_duration_minutes: number;
+}
+
 export default function SectionDetailPage() {
   const params = useParams()
   const router = useRouter()
   const [section, setSection] = useState<Section | null>(null)
+  const [sectionUsage, setSectionUsage] = useState<SectionUsage | null>(null)
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [toggling, setToggling] = useState(false)
@@ -58,13 +75,27 @@ export default function SectionDetailPage() {
   const fetchSection = async () => {
     try {
       const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}`)
+      const [sectionResponse, usageResponse, dailyResponse] = await Promise.all([
+        fetch(`${apiBaseUrl}/api/real/sections/${sectionId}`),
+        fetch(`${apiBaseUrl}/api/real/irrigation-events/section-usage?days=7`),
+        fetch(`${apiBaseUrl}/api/real/irrigation-events/daily-usage?days=7&section_id=${sectionId}`)
+      ])
       
-      if (response.ok) {
-        const data = await response.json()
-        setSection(data)
+      if (sectionResponse.ok && usageResponse.ok && dailyResponse.ok) {
+        const sectionData = await sectionResponse.json()
+        const usageData = await usageResponse.json()
+        const dailyData = await dailyResponse.json()
+        
+        // Find the usage data for this specific section
+        const sectionUsageData = usageData.find((usage: SectionUsage) => 
+          usage.section_id === parseInt(sectionId)
+        )
+        
+        setSection(sectionData)
+        setSectionUsage(sectionUsageData || null)
+        setDailyUsage(dailyData)
       } else {
-        console.error('Failed to fetch section')
+        console.error('Failed to fetch section data')
       }
     } catch (error) {
       console.error('Error fetching section:', error)
@@ -283,7 +314,7 @@ export default function SectionDetailPage() {
                 <div className="text-sm text-muted-foreground">Target: {section.weeklyTarget ? section.weeklyTarget / 7 : 0}L/day</div>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold">{section.waterUsed}L</div>
+                <div className="text-2xl font-bold">{sectionUsage?.water_liters ?? 0}L</div>
                 <div className="text-sm text-green-600">Within target</div>
               </div>
             </div>
@@ -292,16 +323,17 @@ export default function SectionDetailPage() {
             <div className="space-y-3">
               <h4 className="font-medium">Last 7 Days</h4>
               <div className="space-y-2">
-                {(section.dailyUsage ?? []).map((usage, index) => {
+                {(dailyUsage ?? []).map((usage, index) => {
                   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                  const maxUsage = Math.max(...(section.dailyUsage ?? [1]))
+                  const maxUsage = Math.max(...dailyUsage.map(u => u.water_liters), 1)
+                  const date = new Date(usage.date)
                   return (
                     <div key={index} className="flex items-center gap-3">
-                      <div className="w-8 text-sm">{days[index]}</div>
+                      <div className="w-8 text-sm">{days[date.getDay()]}</div>
                       <div className="flex-1">
-                        <Progress value={(usage / maxUsage) * 100} className="h-2" />
+                        <Progress value={(usage.water_liters / maxUsage) * 100} className="h-2" />
                       </div>
-                      <div className="w-12 text-sm text-right">{usage}L</div>
+                      <div className="w-12 text-sm text-right">{usage.water_liters}L</div>
                     </div>
                   )
                 })}

@@ -170,86 +170,86 @@ router.get('/sections/:id', async (req, res) => {
   }
 });
 
-// Get all sensors with real data from moisture_readings
-router.get('/sensors', async (req, res) => {
-  try {
-    const sensors = await prisma.$queryRaw`
-      SELECT 
-        'sensor_' || section_id as id,
-        'Moisture Sensor ' || section_id as name,
-        'MOISTURE' as type,
-        value::float as value,
-        '%' as unit,
-        'Section ' || section_id as zone,
-        'Active' as status,
-        '12.9232,77.5017' as location,
-        timestamp as lastReading,
-        true as isActive,
-        section_id::int as zoneId
-      FROM moisture_readings 
-      WHERE (section_id, timestamp) IN (
-        SELECT section_id, MAX(timestamp) 
-        FROM moisture_readings 
-        GROUP BY section_id
-      )
-      ORDER BY section_id
-    `;
+// // Get all sensors with real data from moisture_readings
+// router.get('/sensors', async (req, res) => {
+//   try {
+//     const sensors = await prisma.$queryRaw`
+//       SELECT 
+//         'sensor_' || section_id as id,
+//         'Moisture Sensor ' || section_id as name,
+//         'MOISTURE' as type,
+//         value::float as value,
+//         '%' as unit,
+//         'Section ' || section_id as zone,
+//         'Active' as status,
+//         '12.9232,77.5017' as location,
+//         timestamp as lastReading,
+//         true as isActive,
+//         section_id::int as zoneId
+//       FROM moisture_readings 
+//       WHERE (section_id, timestamp) IN (
+//         SELECT section_id, MAX(timestamp) 
+//         FROM moisture_readings 
+//         GROUP BY section_id
+//       )
+//       ORDER BY section_id
+//     `;
 
-    res.json(sensors);
-  } catch (error) {
-    console.error('Error fetching sensors:', error);
-    res.status(500).json({ error: 'Failed to fetch sensors' });
-  }
-});
+//     res.json(sensors);
+//   } catch (error) {
+//     console.error('Error fetching sensors:', error);
+//     res.status(500).json({ error: 'Failed to fetch sensors' });
+//   }
+// });
 
-// Get all valves with real data from device_status
-router.get('/valves', async (req, res) => {
-  try {
-    const valves = await prisma.$queryRaw`
-      SELECT 
-        'valve_' || section_id as id,
-        'Valve ' || section_id as name,
-        COALESCE((status_json->>'valve_open')::boolean, false) as isOpen,
-        COALESCE((status_json->>'flow_rate')::float, 0) as flowRate,
-        '12.9232,77.5017' as location,
-        COALESCE((status_json->>'is_active')::boolean, true) as isActive,
-        section_id as zoneId,
-        timestamp as updatedAt
-      FROM device_status 
-      WHERE (section_id, timestamp) IN (
-        SELECT section_id, MAX(timestamp) 
-        FROM device_status 
-        GROUP BY section_id
-      )
-      ORDER BY section_id
-    `;
+// // Get all valves with real data from device_status
+// router.get('/valves', async (req, res) => {
+//   try {
+//     const valves = await prisma.$queryRaw`
+//       SELECT 
+//         'valve_' || section_id as id,
+//         'Valve ' || section_id as name,
+//         COALESCE((status_json->>'valve_open')::boolean, false) as isOpen,
+//         COALESCE((status_json->>'flow_rate')::float, 0) as flowRate,
+//         '12.9232,77.5017' as location,
+//         COALESCE((status_json->>'is_active')::boolean, true) as isActive,
+//         section_id as zoneId,
+//         timestamp as updatedAt
+//       FROM device_status 
+//       WHERE (section_id, timestamp) IN (
+//         SELECT section_id, MAX(timestamp) 
+//         FROM device_status 
+//         GROUP BY section_id
+//       )
+//       ORDER BY section_id
+//     `;
 
-    res.json(valves);
-  } catch (error) {
-    console.error('Error fetching valves:', error);
-    res.status(500).json({ error: 'Failed to fetch valves' });
-  }
-});
+//     res.json(valves);
+//   } catch (error) {
+//     console.error('Error fetching valves:', error);
+//     res.status(500).json({ error: 'Failed to fetch valves' });
+//   }
+// });
 
-// Toggle valve for a section (update device_status)
-router.post('/sections/:id/valve', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { valveOpen } = req.body;
-    const sectionId = parseInt(id);
+// // Toggle valve for a section (update device_status)
+// router.post('/sections/:id/valve', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { valveOpen } = req.body;
+//     const sectionId = parseInt(id);
 
-    // In a real implementation, this would send MQTT command
-    // For now, we'll just return success
-    res.json({ 
-      success: true, 
-      valveOpen: valveOpen,
-      message: `Valve ${valveOpen ? 'opened' : 'closed'} for section ${sectionId}`
-    });
-  } catch (error) {
-    console.error('Error toggling valve:', error);
-    res.status(500).json({ error: 'Failed to toggle valve' });
-  }
-});
+//     // In a real implementation, this would send MQTT command
+//     // For now, we'll just return success
+//     res.json({ 
+//       success: true, 
+//       valveOpen: valveOpen,
+//       message: `Valve ${valveOpen ? 'opened' : 'closed'} for section ${sectionId}`
+//     });
+//   } catch (error) {
+//     console.error('Error toggling valve:', error);
+//     res.status(500).json({ error: 'Failed to toggle valve' });
+//   }
+// });
 
 // Get moisture readings for a specific section
 router.get('/sections/:id/readings', async (req, res) => {
@@ -629,14 +629,22 @@ router.get('/irrigation-events/stats', async (req, res) => {
 // Get daily water usage for the last N days
 router.get('/irrigation-events/daily-usage', async (req, res) => {
   try {
-    const { farm_id, days = 7 } = req.query;
+    const { farm_id, section_id, days = 7 } = req.query;
     
     let whereClause = ' WHERE start_time >= NOW() - INTERVAL \'1 day\' * $1';
     const params: any[] = [parseInt(days as string)];
+    let paramIndex = 2;
 
     if (farm_id) {
-      whereClause += ' AND farm_id = $2';
+      whereClause += ` AND farm_id = $${paramIndex}`;
       params.push(parseInt(farm_id as string));
+      paramIndex++;
+    }
+
+    if (section_id) {
+      whereClause += ` AND section_id = $${paramIndex}`;
+      params.push(parseInt(section_id as string));
+      paramIndex++;
     }
 
     const dailyUsageQuery = `

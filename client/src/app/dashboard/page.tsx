@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Activity,
   CheckCircle,
+  Settings,
 } from "lucide-react";
 import { getApiBaseUrl } from "@/lib/api";
 import { getMoistureStatus, calculateAverage, formatNumber } from "@/lib/utils";
@@ -47,10 +48,19 @@ interface MoistureReading {
   timestamp: string;
 }
 
+interface SectionUsage {
+  section_id: number;
+  water_liters: number;
+  event_count: number;
+  avg_duration_minutes: number;
+  last_irrigation: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
   const [latestReadings, setLatestReadings] = useState<MoistureReading[]>([]);
+  const [sectionUsage, setSectionUsage] = useState<SectionUsage[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalWaterUsed, setTotalWaterUsed] = useState(0);
   const [activeValves, setActiveValves] = useState(0);
@@ -58,16 +68,19 @@ export default function DashboardPage() {
   const fetchSections = async () => {
     try {
       const apiBaseUrl = getApiBaseUrl();
-      const [sectionsResponse, readingsResponse] = await Promise.all([
+      const [sectionsResponse, readingsResponse, usageResponse] = await Promise.all([
         fetch(`${apiBaseUrl}/api/real/sections`),
         fetch(`${apiBaseUrl}/api/real/moisture-readings/latest`),
+        fetch(`${apiBaseUrl}/api/real/irrigation-events/section-usage?days=7`),
       ]);
 
-      if (sectionsResponse.ok && readingsResponse.ok) {
+      if (sectionsResponse.ok && readingsResponse.ok && usageResponse.ok) {
         const sectionsData = await sectionsResponse.json();
         const readingsData = await readingsResponse.json();
+        const usageData = await usageResponse.json();
         setSections(sectionsData);
         setLatestReadings(readingsData);
+        setSectionUsage(usageData);
       } else {
         console.error("Failed to fetch data");
       }
@@ -83,14 +96,21 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const total = sections.reduce((sum, section) => sum + (section.waterUsed || 0), 0);
+    // Calculate total water used from section usage data
+    const total = sectionUsage.reduce((sum, usage) => sum + usage.water_liters, 0);
     const active = sections.filter((section) => section.valveOpen).length;
     setTotalWaterUsed(total);
     setActiveValves(active);
-  }, [sections]);
+  }, [sections, sectionUsage]);
 
   const handleSectionSelect = (sectionId: number) => {
     router.push(`/section-detail/${sectionId}`);
+  };
+
+  // Helper function to get water usage for a specific section
+  const getSectionWaterUsage = (sectionId: number): number => {
+    const usage = sectionUsage.find(u => u.section_id === sectionId);
+    return usage ? usage.water_liters : 0;
   };
 
   if (loading) {
@@ -253,7 +273,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Quick Stats */}
-                    <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="space-y-1">
                         <div className="flex items-center justify-center gap-1">
                           <Droplets className="h-3 w-3 text-blue-500 dark:text-blue-500" />
@@ -262,7 +282,18 @@ export default function DashboardPage() {
                           </span>
                         </div>
                         <div className="text-sm font-medium text-black dark:text-black">
-                          {formatNumber(section.waterUsed)}L
+                          {formatNumber(getSectionWaterUsage(section.id))}L
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-center gap-1">
+                          <Settings className="h-3 w-3 text-purple-500 dark:text-purple-500" />
+                          <span className="text-xs text-black dark:text-black">
+                            Mode
+                          </span>
+                        </div>
+                        <div className="text-sm font-medium text-black dark:text-black">
+                          Auto
                         </div>
                       </div>
                       <div className="space-y-1">
@@ -327,75 +358,6 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </div>
-
-        {/* Latest Moisture Readings */}
-        <div className="space-y-3">
-          <h2 className="text-lg md:text-xl font-semibold">
-            Latest Moisture Readings
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-            {latestReadings.map((reading) => {
-              const moistureStatus = getMoistureStatus(reading.value || 0, 60); // Using 60% as default threshold
-              return (
-                <Card
-                  key={reading.id}
-                  className="hover:shadow-md transition-shadow"
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Droplets className="h-4 w-4 text-blue-500" />
-                        <div>
-                          <CardTitle className="text-base">
-                            Section {reading.section_id}
-                          </CardTitle>
-                          <CardDescription className="text-sm">
-                            Moisture Sensor
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <Badge
-                        variant={moistureStatus.color as any}
-                        className="text-xs"
-                      >
-                        {moistureStatus.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0 space-y-3">
-                    {/* Moisture Value */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Moisture Level</span>
-                        <span className="font-bold">
-                          {reading.value?.toFixed(1) || 0}%
-                        </span>
-                      </div>
-                      <Progress value={reading.value || 0} className="h-2" />
-                    </div>
-
-                    {/* Timestamp */}
-                    <div className="text-xs text-muted-foreground">
-                      Last updated:{" "}
-                      {new Date(reading.timestamp).toLocaleString()}
-                    </div>
-
-                    {/* Quick Action */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => handleSectionSelect(reading.section_id)}
-                    >
-                      View Section Details
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
           {latestReadings.length === 0 && (
             <Card>
               <CardContent className="p-8 text-center">
@@ -410,6 +372,8 @@ export default function DashboardPage() {
             </Card>
           )}
         </div>
+
+      
 
         {/* Quick Actions */}
         <Card>
