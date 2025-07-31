@@ -2,12 +2,13 @@
 
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { getApiBaseUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 
 interface User {
   id: string
   email: string
   name: string
+  farm_ids: number[]
 }
 
 interface AuthContextType {
@@ -27,17 +28,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = async () => {
     try {
-      const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
-        headers: {
-          "Authorization": `Bearer ${getTokenFromCookie()}`,
-        },
-      })
-
-      if (response.ok) {
-        const userData = await response.json()
-        setUser(userData)
-      }
+      const userData = await api.getProfile() as User
+      setUser(userData)
     } catch (error) {
       console.error("Failed to fetch user profile:", error)
     }
@@ -61,6 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (token: string, userData: User) => {
     // Set auth token cookie
     document.cookie = `auth-token=${token}; path=/`
+    // Store user data in localStorage
+    localStorage.setItem('user', JSON.stringify(userData))
     setIsAuthenticated(true)
     setUser(userData)
     router.push("/dashboard")
@@ -69,6 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     // Remove auth token cookie
     document.cookie = "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT"
+    // Remove user data from localStorage
+    localStorage.removeItem('user')
     setIsAuthenticated(false)
     setUser(null)
     router.push("/login")

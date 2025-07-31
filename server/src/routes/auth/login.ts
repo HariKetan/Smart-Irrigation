@@ -32,6 +32,7 @@ export const login = async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         name: user.name,
+        farm_ids: user.farm_ids, // Include farm access
       },
       token,
     });

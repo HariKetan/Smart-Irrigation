@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { getApiBaseUrl } from "@/lib/api";
+import { api } from "@/lib/api";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -54,19 +54,7 @@ export default function RegisterPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     try {
-      const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/auth/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
-
-      if (!response.ok) {
-        throw new Error("Registration failed");
-      }
-
+      await api.register(values);
       toast.success("Registration successful!");
       router.push("/login");
     } catch (error) {

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MapPin, Activity, Droplets, Gauge } from "lucide-react"
 import { Loader } from "@googlemaps/js-api-loader"
-import { getApiBaseUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 
 interface Sensor {
   id: string
@@ -93,24 +93,45 @@ export default function MapPage() {
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const polygonRef = useRef<google.maps.Polygon | null>(null)
 
-  // Fetch sensors and valves from database
+  // Fetch real sensor and valve data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const apiBaseUrl = getApiBaseUrl()
-        const [sensorsResponse, valvesResponse] = await Promise.all([
-          fetch(`${apiBaseUrl}/api/real/sensors`),
-          fetch(`${apiBaseUrl}/api/real/valves`)
-        ])
-
-        if (sensorsResponse.ok && valvesResponse.ok) {
-          const sensorsData = await sensorsResponse.json()
-          const valvesData = await valvesResponse.json()
-          setSensors(sensorsData)
-          setValves(valvesData)
-        } else {
-          console.error('Failed to fetch data')
-        }
+        // Get sections for valve data
+        const sections = await api.getSections() as any[]
+        
+        // Get latest moisture readings for sensor data
+        const readings = await api.getLatestMoistureReadings() as any[]
+        
+        // Transform readings data to match Sensor interface
+        const sensorsData = readings.map((reading) => ({
+          id: `sensor-${reading.section_id}`,
+          name: `Section ${reading.section_name}`,
+          type: 'MOISTURE' as const,
+          value: reading.value || 0,
+          unit: '%',
+          zone: reading.section_name || `Zone ${reading.section_id}`,
+          status: 'Active', // All readings are from active sensors
+          location: reading.section_name || `Zone ${reading.section_id}`,
+          lastReading: reading.timestamp || new Date().toISOString(),
+          isActive: true,
+          zoneId: reading.section_id
+        }))
+        
+        // Transform sections data to match Valve interface
+        const valvesData = sections.map((section) => ({
+          id: `valve-${section.id}`,
+          name: `Valve ${section.id}`,
+          isOpen: section.valveOpen || false,
+          flowRate: 0, // Not available in current data
+          location: section.location || `Zone ${section.id}`,
+          isActive: section.valveOpen || false,
+          zoneId: section.id,
+          updatedAt: section.lastIrrigation || new Date().toISOString()
+        }))
+        
+        setSensors(sensorsData)
+        setValves(valvesData)
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -123,8 +144,16 @@ export default function MapPage() {
 
   useEffect(() => {
     const initMap = async () => {
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+      
+      if (!apiKey || apiKey === "YOUR_API_KEY_HERE") {
+        console.warn("Google Maps API key not configured. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env.local file");
+        setLoading(false);
+        return;
+      }
+      
       const loader = new Loader({
-        apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_API_KEY_HERE",
+        apiKey: apiKey,
         version: "weekly",
       })
 
@@ -331,6 +360,31 @@ export default function MapPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-muted-foreground">Loading map data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Check if Google Maps API key is configured
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!apiKey || apiKey === "YOUR_API_KEY_HERE") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="text-6xl mb-4">🗺️</div>
+          <h2 className="text-2xl font-bold mb-4">Google Maps Not Configured</h2>
+          <p className="text-muted-foreground mb-6">
+            To view the interactive map, please configure your Google Maps API key.
+          </p>
+          <div className="bg-muted p-4 rounded-lg text-sm font-mono text-left">
+            <p className="mb-2">Create a <code>.env.local</code> file in the client directory:</p>
+            <code className="block">
+              NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_actual_api_key_here
+            </code>
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            Get your API key from the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a>
+          </p>
         </div>
       </div>
     )

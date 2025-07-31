@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { toast } from "sonner"
 import Link from "next/link"
-import { getApiBaseUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -20,21 +20,7 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed")
-      }
-
+      const data = await api.login({ email, password }) as { token: string; user: any }
       login(data.token, data.user)
       toast.success("Successfully logged in!", {
         description: "Welcome back to your account",

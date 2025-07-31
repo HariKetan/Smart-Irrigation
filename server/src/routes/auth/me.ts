@@ -20,6 +20,7 @@ export const me = async (req: Request, res: Response) => {
         id: true,
         email: true,
         name: true,
+        farm_ids: true,
       },
     });
 

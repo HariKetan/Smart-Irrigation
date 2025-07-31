@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Droplets, Activity, Gauge, RefreshCw } from "lucide-react"
-import { getApiBaseUrl } from "@/lib/api"
+import { api } from "@/lib/api"
 
 interface Sensor {
   id: string
@@ -28,15 +28,25 @@ export default function DataDisplay() {
 
   const fetchSensors = async () => {
     try {
-      const apiBaseUrl = getApiBaseUrl()
-      const response = await fetch(`${apiBaseUrl}/api/real/sensors`)
+      // Get latest moisture readings which contain real sensor data
+      const readings = await api.getLatestMoistureReadings() as any[]
       
-      if (response.ok) {
-        const data = await response.json()
-        setSensors(data)
-      } else {
-        console.error('Failed to fetch sensors')
-      }
+      // Transform readings data to match Sensor interface
+      const sensorData = readings.map((reading) => ({
+        id: `sensor-${reading.section_id}`,
+        name: `Section ${reading.section_name}`,
+        type: 'MOISTURE' as const,
+        value: reading.value || 0,
+        unit: '%',
+        zone: reading.section_name || `Zone ${reading.section_id}`,
+        status: 'Active', // All readings are from active sensors
+        location: reading.section_name || `Zone ${reading.section_id}`,
+        lastReading: reading.timestamp || new Date().toISOString(),
+        isActive: true,
+        zoneId: reading.section_id
+      }))
+      
+      setSensors(sensorData)
     } catch (error) {
       console.error('Error fetching sensors:', error)
     } finally {

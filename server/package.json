@@ -12,6 +12,10 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "ts-node src/seed.ts",
+    "db:seed:farms": "ts-node src/seed-farms.ts",
+    "db:seed:data": "ts-node seed-sample-data.ts",
+    "db:seed:schedules": "ts-node seed-schedules.ts",
+    "test:cron": "node test-cron.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -23,11 +27,17 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/mqtt": "^2.5.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/ws": "^8.18.1",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.13.3",
+    "node-cron": "^4.2.1",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

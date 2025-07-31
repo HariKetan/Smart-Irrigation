@@ -29,11 +29,15 @@ import {
   Zap,
   Thermometer,
 } from "lucide-react";
-import { getApiBaseUrl } from "@/lib/api";
+import { api, getCurrentUserFarmIds } from "@/lib/api";
 import { getMoistureStatus, calculateAverage, formatNumber } from "@/lib/utils";
+
+import BulkOperations from "@/components/BulkOperations";
 
 interface Section {
   id: number;
+  farm_id: number;
+  section_number: number;
   name: string;
   crop: string;
   moisture?: number;
@@ -55,6 +59,8 @@ interface MoistureReading {
   section_id: number;
   value?: number;
   timestamp: string;
+  farm_name?: string;
+  section_name?: string;
 }
 
 interface SectionUsage {
@@ -81,12 +87,24 @@ interface DeviceStatus {
   timestamp: number;
 }
 
+interface MoistureReadingsData {
+  data: MoistureReading[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
   const [latestReadings, setLatestReadings] = useState<MoistureReading[]>([]);
   const [sectionUsage, setSectionUsage] = useState<SectionUsage[]>([]);
+
   const [deviceStatuses, setDeviceStatuses] = useState<DeviceStatus[]>([]);
+  const [moistureReadings, setMoistureReadings] = useState<MoistureReadingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [totalWaterUsed, setTotalWaterUsed] = useState(0);
   const [activeValves, setActiveValves] = useState(0);
@@ -99,37 +117,32 @@ export default function DashboardPage() {
 
   const fetchSections = async () => {
     try {
-      const apiBaseUrl = getApiBaseUrl();
-      const [sectionsResponse, readingsResponse, usageResponse, deviceStatusResponse] = await Promise.all([
-        fetch(`${apiBaseUrl}/api/real/sections`),
-        fetch(`${apiBaseUrl}/api/real/moisture-readings/latest`),
-        fetch(`${apiBaseUrl}/api/real/irrigation-events/section-usage?days=7`),
-        fetch(`${apiBaseUrl}/api/real/device-status/irrigation`),
-      ]);
+      // Get sections data
+      const sectionsData = await api.getSections() as any[];
+      console.log('Fetched sections data:', sectionsData);
+      setSections(sectionsData);
+      
+      // Get latest moisture readings
+      const readingsData = await api.getLatestMoistureReadings() as any[];
+      setLatestReadings(readingsData);
+      
+      // Get section usage statistics
+      const usageData = await api.getSectionUsage() as any[];
+      setSectionUsage(usageData);
+      
+      // Get device status (using irrigation device status as proxy)
+      const deviceStatusData = await api.getIrrigationDeviceStatus() as any[];
+      setDeviceStatuses(deviceStatusData);
 
-      if (sectionsResponse.ok && readingsResponse.ok && usageResponse.ok && deviceStatusResponse.ok) {
-        const sectionsData = await sectionsResponse.json();
-        const readingsData = await readingsResponse.json();
-        const usageData = await usageResponse.json();
-        const deviceStatusData = await deviceStatusResponse.json();
-        
-        setSections(sectionsData);
-        setLatestReadings(readingsData);
-        setSectionUsage(usageData);
-        setDeviceStatuses(deviceStatusData);
-
-        // Update system status based on device statuses
-        if (deviceStatusData.length > 0) {
-          const latestStatus = deviceStatusData[0];
-          setSystemStatus({
-            online: true,
-            wifiConnected: Boolean(latestStatus.wifi),
-            mqttConnected: Boolean(latestStatus.mqtt),
-            lastError: latestStatus.last_error || ""
-          });
-        }
-      } else {
-        console.error("Failed to fetch data");
+      // Update system status based on device statuses
+      if (deviceStatusData.length > 0) {
+        const latestStatus = deviceStatusData[0];
+        setSystemStatus({
+          online: true,
+          wifiConnected: Boolean(latestStatus.wifi),
+          mqttConnected: Boolean(latestStatus.mqtt),
+          lastError: latestStatus.last_error || ""
+        });
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -150,57 +163,19 @@ export default function DashboardPage() {
     setActiveValves(active);
   }, [sections, sectionUsage]);
 
-  const handleSectionSelect = (sectionId: number) => {
-    router.push(`/section-detail/${sectionId}`);
+  const handleSectionSelect = (section: Section) => {
+    // Debug logging
+    console.log('Section clicked:', section);
+    console.log('farm_id:', section.farm_id);
+    console.log('section_number:', section.section_number);
+    
+    // Navigate to the section detail page using farm_id and section_number
+    const route = `/section-detail/${section.farm_id}/${section.section_number}`;
+    console.log('Navigating to:', route);
+    router.push(route);
   };
 
-  const handleValveToggle = async (sectionId: number, currentValveState: boolean) => {
-    try {
-      const apiBaseUrl = getApiBaseUrl();
-      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/valve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          valveOpen: !currentValveState,
-          duration: 60 // 60 seconds default
-        }),
-      });
 
-      if (response.ok) {
-        // Refresh data
-        await fetchSections();
-      } else {
-        console.error('Failed to toggle valve');
-      }
-    } catch (error) {
-      console.error('Error toggling valve:', error);
-    }
-  };
-
-  const handleModeToggle = async (sectionId: number, currentMode: string) => {
-    try {
-      const newMode = currentMode === 'auto' ? 'manual' : 'auto';
-      const apiBaseUrl = getApiBaseUrl();
-      const response = await fetch(`${apiBaseUrl}/api/real/sections/${sectionId}/mode`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ mode: newMode }),
-      });
-
-      if (response.ok) {
-        // Refresh data
-        await fetchSections();
-      } else {
-        console.error('Failed to change mode');
-      }
-    } catch (error) {
-      console.error('Error changing mode:', error);
-    }
-  };
 
   // Helper function to get water usage for a specific section
   const getSectionWaterUsage = (sectionId: number): number => {
@@ -330,6 +305,8 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+
+
         {/* Section Cards */}
         <div className="space-y-3">
           <h2 className="text-lg md:text-xl font-semibold">Farm Sections</h2>
@@ -345,7 +322,7 @@ export default function DashboardPage() {
                 <Card
                   key={section.id}
                   className={`${moistureStatus.bgColor} transition-all duration-200 cursor-pointer hover:shadow-md dark:${moistureStatus.bgColor}`}
-                  onClick={() => handleSectionSelect(section.id)}
+                  onClick={() => handleSectionSelect(section)}
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -367,7 +344,10 @@ export default function DashboardPage() {
                         >
                           {moistureStatus.status}
                         </Badge>
-                        <ChevronRight className="h-4 w-4 text-black dark:text-black" />
+                        <div className="flex items-center gap-1 text-xs text-black dark:text-black">
+                          <span>View Details</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -462,33 +442,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Quick Controls */}
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant={section.valveOpen ? "destructive" : "default"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleValveToggle(section.id, section.valveOpen);
-                        }}
-                        className="flex-1 text-xs"
-                      >
-                        <Power className="h-3 w-3 mr-1" />
-                        {section.valveOpen ? "Stop" : "Start"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleModeToggle(section.id, section.mode || 'manual');
-                        }}
-                        className="flex-1 text-xs"
-                      >
-                        <Settings className="h-3 w-3 mr-1" />
-                        {section.mode === 'auto' ? 'Auto' : 'Manual'}
-                      </Button>
-                    </div>
+
 
                     {/* Status Alert */}
                     {(section.moisture || 0) < (section.threshold || 60) ? (
@@ -543,6 +497,17 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Bulk Operations Panel */}
+          <div className="col-span-full">
+            <BulkOperations
+              sections={sections}
+              onOperationComplete={() => {
+                // Refresh data after bulk operation
+                fetchSections();
+              }}
+            />
+          </div>
         </div>
 
         {/* Quick Actions */}
@@ -550,7 +515,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="text-base">Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button variant="outline" className="h-12">
               <Activity className="h-4 w-4 mr-2" />
               System Status
@@ -558,6 +523,35 @@ export default function DashboardPage() {
             <Button variant="outline" className="h-12">
               <Droplets className="h-4 w-4 mr-2" />
               Water Report
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-12"
+              onClick={() => router.push('/section-detail/1/1')}
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              Reporting Control
+            </Button>
+            <Button 
+              variant="outline" 
+              className="h-12"
+              onClick={async () => {
+                try {
+                  // Set all sections to 5-second reporting for live mode
+                  const farmIds = getCurrentUserFarmIds();
+                  const farmId = farmIds[0] || 1;
+                  for (let i = 1; i <= 4; i++) {
+                    await api.updateReportingInterval(farmId, i, 5);
+                  }
+                  alert('Live mode activated! All sections now reporting every 5 seconds.');
+                } catch (error) {
+                  console.error('Error setting live mode:', error);
+                  alert('Failed to set live mode. Please try again.');
+                }
+              }}
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Activate Live Mode
             </Button>
           </CardContent>
         </Card>

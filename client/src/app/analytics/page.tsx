@@ -1,320 +1,410 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Droplets, Gauge, AlertTriangle, Power, Activity } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Droplets, Gauge, AlertTriangle, Power, Activity, RefreshCw } from "lucide-react"
+import { 
+  LineChart, 
+  Line, 
+  AreaChart, 
+  Area, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer 
+} from 'recharts'
+import { api } from "@/lib/api"
 
-// Mock data for demonstration
-const analyticsData = {
-  daily: {
-    waterUsage: [1200, 1500, 1300, 1400, 1600, 1800, 1700],
-    moistureLevels: [45, 42, 48, 44, 46, 43, 47],
-    activeValves: [2, 3, 2, 3, 2, 3, 2],
-    alerts: [1, 2, 0, 1, 2, 1, 0],
-  },
-  weekly: {
-    waterUsage: [8500, 9200, 8800, 9500, 8900, 9100, 9300],
-    moistureLevels: [45, 43, 46, 44, 47, 45, 46],
-    activeValves: [2, 3, 2, 3, 2, 3, 2],
-    alerts: [5, 7, 4, 6, 5, 4, 3],
-  },
-  monthly: {
-    waterUsage: [35000, 38000, 36000, 37000, 39000, 37500, 38500],
-    moistureLevels: [45, 44, 46, 45, 47, 46, 45],
-    activeValves: [2, 3, 2, 3, 2, 3, 2],
-    alerts: [15, 18, 14, 16, 17, 15, 14],
-  },
+interface AnalyticsSummary {
+  totalWaterUsage: number
+  averageMoisture: number
+  activeValves: number
+  totalEvents: number
+  period: number
+}
+
+interface WaterUsageData {
+  date: string
+  water_liters: number
+  event_count: number
+}
+
+interface MoistureTrendsData {
+  date: string
+  avg_moisture: number
+  min_moisture: number
+  max_moisture: number
+  reading_count: number
+}
+
+interface ValveActivityData {
+  date: string
+  active_valves: number
+  total_events: number
 }
 
 export default function Analytics() {
+  const [activeTab, setActiveTab] = useState("daily")
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null)
+  const [waterUsage, setWaterUsage] = useState<WaterUsageData[]>([])
+  const [moistureTrends, setMoistureTrends] = useState<MoistureTrendsData[]>([])
+  const [valveActivity, setValveActivity] = useState<ValveActivityData[]>([])
+
+  const getPeriodDays = (tab: string) => {
+    switch (tab) {
+      case "daily": return 7
+      case "weekly": return 30
+      case "monthly": return 90
+      default: return 7
+    }
+  }
+
+  const fetchAnalyticsData = async (period: number) => {
+    try {
+      setLoading(true)
+      
+      const [summaryData, waterData, moistureData, valveData] = await Promise.all([
+        api.getAnalyticsSummary(period),
+        api.getWaterUsageAnalytics(period),
+        api.getMoistureTrendsAnalytics(period),
+        api.getValveActivityAnalytics(period)
+      ])
+
+      setSummary(summaryData as AnalyticsSummary)
+      setWaterUsage(waterData as WaterUsageData[])
+      setMoistureTrends(moistureData as MoistureTrendsData[])
+      setValveActivity(valveData as ValveActivityData[])
+    } catch (error) {
+      console.error('Error fetching analytics data:', error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    const period = getPeriodDays(activeTab)
+    fetchAnalyticsData(period)
+  }, [activeTab])
+
+  const handleRefresh = () => {
+    setRefreshing(true)
+    const period = getPeriodDays(activeTab)
+    fetchAnalyticsData(period)
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    })
+  }
+
+  const formatWaterUsage = (liters: number) => {
+    if (liters >= 1000) {
+      return `${(liters / 1000).toFixed(1)}k L`
+    }
+    return `${Math.round(liters)} L`
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading analytics data...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background p-3 md:p-6">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl md:text-3xl font-bold">Analytics Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Monitor system performance and trends</p>
+        <div className="flex items-center justify-between">
+          <div className="text-center md:text-left">
+            <h1 className="text-2xl md:text-3xl font-bold">Analytics Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Monitor system performance and trends</p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
 
+        {/* Summary Cards */}
+        {summary && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Water Usage</CardTitle>
+                <Droplets className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {formatWaterUsage(summary.totalWaterUsage)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Last {summary.period} days
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Average Moisture</CardTitle>
+                <Gauge className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {summary.averageMoisture}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Last {summary.period} days
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Valves</CardTitle>
+                <Power className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {summary.activeValves}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Currently active
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Events</CardTitle>
+                <Activity className="h-4 w-4 text-purple-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {summary.totalEvents}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Last {summary.period} days
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Time Period Tabs */}
-        <Tabs defaultValue="daily" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="daily">Daily</TabsTrigger>
-            <TabsTrigger value="weekly">Weekly</TabsTrigger>
-            <TabsTrigger value="monthly">Monthly</TabsTrigger>
+            <TabsTrigger value="daily">Daily (7 days)</TabsTrigger>
+            <TabsTrigger value="weekly">Weekly (30 days)</TabsTrigger>
+            <TabsTrigger value="monthly">Monthly (90 days)</TabsTrigger>
           </TabsList>
 
-          {/* Daily Analytics */}
-          <TabsContent value="daily" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Water Usage</CardTitle>
-                  <Droplets className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analyticsData.daily.waterUsage.reduce((a, b) => a + b, 0).toLocaleString()}L
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 days</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Average Moisture</CardTitle>
-                  <Gauge className="h-4 w-4 text-orange-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.round(
-                      analyticsData.daily.moistureLevels.reduce((a, b) => a + b, 0) /
-                        analyticsData.daily.moistureLevels.length
-                    )}
-                    %
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 days</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Valves</CardTitle>
-                  <Power className="h-4 w-4 text-green-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.round(
-                      analyticsData.daily.activeValves.reduce((a, b) => a + b, 0) /
-                        analyticsData.daily.activeValves.length
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Average per day</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Alerts</CardTitle>
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analyticsData.daily.alerts.reduce((a, b) => a + b, 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 days</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Charts Section */}
+          <TabsContent value={activeTab} className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Water Usage Chart */}
               <Card>
                 <CardHeader>
                   <CardTitle>Water Usage Trend</CardTitle>
                   <CardDescription>Daily water consumption in liters</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[300px] flex items-center justify-center border rounded-lg">
-                    <p className="text-muted-foreground">Chart visualization will be implemented here</p>
-                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={waterUsage}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={formatDate}
+                        fontSize={12}
+                      />
+                      <YAxis fontSize={12} />
+                      <Tooltip 
+                        formatter={(value: any) => [`${value} L`, 'Water Usage']}
+                        labelFormatter={formatDate}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="water_liters" 
+                        stroke="#3b82f6" 
+                        fill="#3b82f6" 
+                        fillOpacity={0.3}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
 
+              {/* Moisture Levels Chart */}
               <Card>
                 <CardHeader>
                   <CardTitle>Moisture Levels</CardTitle>
                   <CardDescription>Average soil moisture percentage</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[300px] flex items-center justify-center border rounded-lg">
-                    <p className="text-muted-foreground">Chart visualization will be implemented here</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Weekly Analytics */}
-          <TabsContent value="weekly" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Water Usage</CardTitle>
-                  <Droplets className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analyticsData.weekly.waterUsage.reduce((a, b) => a + b, 0).toLocaleString()}L
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 weeks</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Average Moisture</CardTitle>
-                  <Gauge className="h-4 w-4 text-orange-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.round(
-                      analyticsData.weekly.moistureLevels.reduce((a, b) => a + b, 0) /
-                        analyticsData.weekly.moistureLevels.length
-                    )}
-                    %
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 weeks</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Valves</CardTitle>
-                  <Power className="h-4 w-4 text-green-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.round(
-                      analyticsData.weekly.activeValves.reduce((a, b) => a + b, 0) /
-                        analyticsData.weekly.activeValves.length
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Average per week</p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={moistureTrends}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={formatDate}
+                        fontSize={12}
+                      />
+                      <YAxis fontSize={12} />
+                      <Tooltip 
+                        formatter={(value: any) => [`${value}%`, 'Moisture']}
+                        labelFormatter={formatDate}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="avg_moisture" 
+                        stroke="#f97316" 
+                        strokeWidth={2}
+                        name="Average"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="min_moisture" 
+                        stroke="#ef4444" 
+                        strokeWidth={1}
+                        name="Minimum"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="max_moisture" 
+                        stroke="#22c55e" 
+                        strokeWidth={1}
+                        name="Maximum"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Alerts</CardTitle>
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analyticsData.weekly.alerts.reduce((a, b) => a + b, 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 weeks</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Valve Activity Chart */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Weekly Water Usage</CardTitle>
-                  <CardDescription>Water consumption by week</CardDescription>
+                  <CardTitle>Valve Activity</CardTitle>
+                  <CardDescription>Number of active valves per day</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[300px] flex items-center justify-center border rounded-lg">
-                    <p className="text-muted-foreground">Chart visualization will be implemented here</p>
-                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={valveActivity}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={formatDate}
+                        fontSize={12}
+                      />
+                      <YAxis fontSize={12} />
+                      <Tooltip 
+                        formatter={(value: any) => [value, 'Active Valves']}
+                        labelFormatter={formatDate}
+                      />
+                      <Bar 
+                        dataKey="active_valves" 
+                        fill="#22c55e" 
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
 
+              {/* Irrigation Events Chart */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Weekly Moisture Trends</CardTitle>
-                  <CardDescription>Average moisture levels by week</CardDescription>
+                  <CardTitle>Irrigation Events</CardTitle>
+                  <CardDescription>Number of irrigation events per day</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[300px] flex items-center justify-center border rounded-lg">
-                    <p className="text-muted-foreground">Chart visualization will be implemented here</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Monthly Analytics */}
-          <TabsContent value="monthly" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Water Usage</CardTitle>
-                  <Droplets className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analyticsData.monthly.waterUsage.reduce((a, b) => a + b, 0).toLocaleString()}L
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 months</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Average Moisture</CardTitle>
-                  <Gauge className="h-4 w-4 text-orange-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.round(
-                      analyticsData.monthly.moistureLevels.reduce((a, b) => a + b, 0) /
-                        analyticsData.monthly.moistureLevels.length
-                    )}
-                    %
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 months</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Valves</CardTitle>
-                  <Power className="h-4 w-4 text-green-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {Math.round(
-                      analyticsData.monthly.activeValves.reduce((a, b) => a + b, 0) /
-                        analyticsData.monthly.activeValves.length
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Average per month</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Alerts</CardTitle>
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analyticsData.monthly.alerts.reduce((a, b) => a + b, 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Last 7 months</p>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={waterUsage}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        tickFormatter={formatDate}
+                        fontSize={12}
+                      />
+                      <YAxis fontSize={12} />
+                      <Tooltip 
+                        formatter={(value: any) => [value, 'Events']}
+                        labelFormatter={formatDate}
+                      />
+                      <Bar 
+                        dataKey="event_count" 
+                        fill="#8b5cf6" 
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Monthly Water Usage</CardTitle>
-                  <CardDescription>Water consumption by month</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px] flex items-center justify-center border rounded-lg">
-                    <p className="text-muted-foreground">Chart visualization will be implemented here</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Monthly Moisture Trends</CardTitle>
-                  <CardDescription>Average moisture levels by month</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px] flex items-center justify-center border rounded-lg">
-                    <p className="text-muted-foreground">Chart visualization will be implemented here</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            {/* Data Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Detailed Data</CardTitle>
+                <CardDescription>Raw analytics data for the selected period</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Date</th>
+                        <th className="text-left p-2">Water Usage (L)</th>
+                        <th className="text-left p-2">Events</th>
+                        <th className="text-left p-2">Avg Moisture (%)</th>
+                        <th className="text-left p-2">Active Valves</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {waterUsage.map((item, index) => {
+                        const moistureItem = moistureTrends.find(m => m.date === item.date)
+                        const valveItem = valveActivity.find(v => v.date === item.date)
+                        return (
+                          <tr key={index} className="border-b hover:bg-muted/50">
+                            <td className="p-2">{formatDate(item.date)}</td>
+                            <td className="p-2">{Math.round(item.water_liters)}</td>
+                            <td className="p-2">{item.event_count}</td>
+                            <td className="p-2">
+                              {moistureItem ? Math.round(moistureItem.avg_moisture) : '-'}
+                            </td>
+                            <td className="p-2">
+                              {valveItem ? valveItem.active_valves : '-'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
