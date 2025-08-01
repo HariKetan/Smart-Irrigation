@@ -2,12 +2,12 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <esp_sleep.h>
 
 #define RELAY_PINS {26, 25, 33, 32}
 #define FLOW_PINS {27, 14, 12, 13}
-#define VOLUME_PER_PULSE 1.7
-// Section indexing now starts from 1 (index 0 is unused)
 #define NUM_SECTIONS 4
+#define ML_PER_PULSE 2.25 // ml per pulse for YF-S201 flow sensor
 #define MAX_SECTIONS 5 // index 0 unused
 
 const char* ssid = "Sumukha_4G";
@@ -35,7 +35,8 @@ volatile int pulseCounts[MAX_SECTIONS] = {0, 0, 0, 0, 0};
 String mode[MAX_SECTIONS] = {"", "manual", "manual", "manual", "manual"};
 bool valveOn[MAX_SECTIONS] = {false, false, false, false, false};
 int latestMoisture[MAX_SECTIONS] = {0, 100, 100, 100, 100}; // Received from moisture sensor ESP32 via MQTT
-int threshold[MAX_SECTIONS] = {0, 40, 40, 40, 40};
+int minThreshold[MAX_SECTIONS] = {0, 30, 30, 30, 30}; // Start irrigation when moisture drops below this
+int maxThreshold[MAX_SECTIONS] = {0, 70, 70, 70, 70}; // Stop irrigation when moisture reaches this
 unsigned long irrigationStart[MAX_SECTIONS] = {0, 0, 0, 0, 0};
 unsigned long irrigationDuration[MAX_SECTIONS] = {0, 0, 0, 0, 0}; // Duration in milliseconds
 
@@ -58,11 +59,12 @@ isr_ptr_t pulseISRs[MAX_SECTIONS] = {nullptr, pulse1, pulse2, pulse3, pulse4};
 
 void loadConfig() {
   prefs.begin("irrigation", false);
-  enableDeepSleepManual = prefs.getBool("deepSleep", false);
-  deepSleepDuration = prefs.getInt("sleepDur", 60);
   for (int i = 1; i <= NUM_SECTIONS; i++) {
-    threshold[i] = prefs.getInt(("thresh" + String(i)).c_str(), 40);
+    minThreshold[i] = prefs.getInt(("minThresh" + String(i)).c_str(), 30);
+    maxThreshold[i] = prefs.getInt(("maxThresh" + String(i)).c_str(), 70);
   }
+  enableDeepSleepManual = prefs.getBool("deepSleep", false);
+  deepSleepDuration = prefs.getInt("sleepDur", 300);
   prefs.end();
 }
 
@@ -110,37 +112,33 @@ void ensureMQTT() {
 }
 
 void publishStatus() {
-  // Publish status for each section individually
+  StaticJsonDocument<512> doc;
+  doc["timestamp"] = millis();
+  doc["wifi_rssi"] = WiFi.RSSI();
+  doc["mqtt_connected"] = client.connected();
+  doc["uptime"] = millis();
+  doc["last_error"] = lastError;
+  
+  JsonArray sections = doc.createNestedArray("sections");
   for (int i = 1; i <= NUM_SECTIONS; i++) {
-    // Use the same approach as moisture sensor - String payload with actual section data
-    String payload = "{\"device_id\":\"" + String(device_id) + "\"" +
-                     ",\"section_id\":" + String(i) +
-                     ",\"uptime\":" + String(millis()) +
-                     ",\"wifi\":" + String(WiFi.status() == WL_CONNECTED) +
-                     ",\"mqtt\":" + String(client.connected()) +
-                     ",\"last_error\":\"" + lastError + "\"" +
-                     ",\"valve_on\":" + String(valveOn[i]) +
-                     ",\"mode\":\"" + mode[i] + "\"" +
-                     ",\"latest_moisture\":" + String(latestMoisture[i]) +
-                     ",\"threshold\":" + String(threshold[i]) +
-                     ",\"pulse_count\":" + String(pulseCounts[i]) +
-                     ",\"water_ml\":" + String(pulseCounts[i] * VOLUME_PER_PULSE) +
-                     ",\"timestamp\":" + String(millis()) + "}";
-    
+    JsonObject section = sections.createNestedObject();
+    section["section_id"] = i;
+    section["valve_on"] = valveOn[i];
+    section["mode"] = mode[i];
+    section["moisture"] = latestMoisture[i];
+    section["min_threshold"] = minThreshold[i];
+    section["max_threshold"] = maxThreshold[i];
+    section["water_ml"] = pulseCounts[i] * ML_PER_PULSE;
+    section["flow_rate"] = calculateFlowRate(i);
+  }
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  // Publish to all sections
+  for (int i = 1; i <= NUM_SECTIONS; i++) {
     String topic = "farm/" + String(farm_id) + "/section/" + String(i) + "/status";
-    
-    // Use the exact same method as moisture sensor
-    bool publishSuccess = client.publish(topic.c_str(), payload.c_str());
-    if (publishSuccess) {
-      Serial.println("Status published for section " + String(i) + " to topic: " + topic);
-      Serial.println("Payload: " + payload);
-    } else {
-      Serial.println("FAILED to publish status for section " + String(i));
-      lastError = "Status publish failed for section " + String(i);
-    }
-    
-    // Process MQTT loop - REMOVED DELAY for faster status updates
-    client.loop();
+    client.publish(topic.c_str(), jsonString.c_str());
   }
 }
 
@@ -208,7 +206,7 @@ void loop() {
   
   // Check all sections for auto mode irrigation (1-based)
   for (int i = 1; i <= NUM_SECTIONS; i++) {
-    if (mode[i] == "auto" && valveOn[i] && latestMoisture[i] >= threshold[i]) {
+    if (mode[i] == "auto" && valveOn[i] && latestMoisture[i] >= maxThreshold[i]) {
       stopIrrigation(i);
     }
     
@@ -298,13 +296,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     latestMoisture[section_id] = value;
     Serial.print("Received moisture for section "); Serial.print(section_id); Serial.print(": "); Serial.println(value);
     if (mode[section_id] == "auto") {
-      if (value < threshold[section_id] && !valveOn[section_id]) {
+      // Start irrigation when moisture drops below min threshold
+      if (value < minThreshold[section_id] && !valveOn[section_id]) {
         startIrrigation(section_id);
-        ackCommand(section_id, "auto_irrigate", "success", "Irrigation started");
+        ackCommand(section_id, "auto_irrigate", "success", "Irrigation started - moisture below min threshold");
         // Status already published in startIrrigation()
-      } else if (value >= threshold[section_id] && valveOn[section_id]) {
+      } 
+      // Stop irrigation when moisture reaches max threshold
+      else if (value >= maxThreshold[section_id] && valveOn[section_id]) {
         stopIrrigation(section_id);
-        ackCommand(section_id, "auto_irrigate", "success", "Irrigation stopped");
+        ackCommand(section_id, "auto_irrigate", "success", "Irrigation stopped - moisture reached max threshold");
         // Status already published in stopIrrigation()
       }
     }
@@ -321,12 +322,29 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       Serial.print("Deep sleep duration: "); Serial.println(deepSleepDuration);
       ackCommand(section_id, "config", "success", "deep_sleep_duration updated");
     }
+    if (doc.containsKey("min_threshold")) {
+      int sectionMinThresh = doc["min_threshold"];
+      minThreshold[section_id] = sectionMinThresh;
+      saveConfig(("minThresh" + String(section_id)).c_str(), sectionMinThresh);
+      Serial.print("Section "); Serial.print(section_id); Serial.print(" min threshold set to "); Serial.println(sectionMinThresh);
+      ackCommand(section_id, "config", "success", "min_threshold updated");
+    }
+    if (doc.containsKey("max_threshold")) {
+      int sectionMaxThresh = doc["max_threshold"];
+      maxThreshold[section_id] = sectionMaxThresh;
+      saveConfig(("maxThresh" + String(section_id)).c_str(), sectionMaxThresh);
+      Serial.print("Section "); Serial.print(section_id); Serial.print(" max threshold set to "); Serial.println(sectionMaxThresh);
+      ackCommand(section_id, "config", "success", "max_threshold updated");
+    }
+    // Legacy threshold support (sets both min and max)
     if (doc.containsKey("threshold")) {
       int sectionThresh = doc["threshold"];
-      threshold[section_id] = sectionThresh;
-      saveConfig(("thresh" + String(section_id)).c_str(), sectionThresh);
+      minThreshold[section_id] = sectionThresh;
+      maxThreshold[section_id] = sectionThresh + 20; // Default max is 20 points higher
+      saveConfig(("minThresh" + String(section_id)).c_str(), sectionThresh);
+      saveConfig(("maxThresh" + String(section_id)).c_str(), sectionThresh + 20);
       Serial.print("Section "); Serial.print(section_id); Serial.print(" threshold set to "); Serial.println(sectionThresh);
-      ackCommand(section_id, "config", "success", "threshold updated");
+      ackCommand(section_id, "config", "success", "threshold updated (min and max)");
     }
   }
 }
@@ -361,7 +379,7 @@ void stopIrrigation(int section) {
 
 void publishWaterUsage(int section, unsigned long start, unsigned long end) {
   if (section < 1 || section > NUM_SECTIONS) return;
-  float water_ml = pulseCounts[section] * VOLUME_PER_PULSE;
+  float water_ml = pulseCounts[section] * ML_PER_PULSE;
   StaticJsonDocument<256> doc;
   doc["farm_id"] = farm_id;
   doc["section_id"] = section;
@@ -387,4 +405,23 @@ int extractSectionId(String topic) {
   int sid = sectionStr.toInt();
   if (sid < 1 || sid > NUM_SECTIONS) return -1;
   return sid;
+}
+
+// Flow sensor calibration
+// const float ML_PER_PULSE = 2.25; // ml per pulse for YF-S201 flow sensor // This line is removed as ML_PER_PULSE is now defined globally
+
+// Calculate flow rate in ml/min for a section
+float calculateFlowRate(int section) {
+  if (section < 1 || section > NUM_SECTIONS) return 0.0;
+  
+  // Simple flow rate calculation based on recent pulses
+  // This is a basic implementation - can be enhanced with more sophisticated algorithms
+  unsigned long currentTime = millis();
+  unsigned long timeWindow = 60000; // 1 minute window
+  
+  // For now, return a basic flow rate based on valve state
+  if (valveOn[section]) {
+    return 1000.0; // Approximate flow rate in ml/min when valve is open
+  }
+  return 0.0;
 }

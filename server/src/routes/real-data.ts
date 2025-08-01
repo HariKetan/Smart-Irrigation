@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { authenticateToken } from '../lib/auth';
 import { validateFarmAccess } from '../lib/farmAccess';
 import mqtt from 'mqtt';
+import { broadcastSectionUpdate } from '../index';
 
 const router = express.Router();
 
@@ -115,12 +116,6 @@ function sendMqttCommand(topic: string, payload: any) {
       reject(new Error('MQTT client not connected'));
     }
   });
-}
-
-// Function to broadcast section updates (will be imported from index.ts)
-function broadcastSectionUpdate(farmId: number, sectionNumber: number, data: any) {
-  // This will be replaced with the actual import once circular dependency is resolved
-  console.log(`Broadcasting update for farm ${farmId}, section ${sectionNumber}:`, data);
 }
 
 // Helper function to convert BigInt values to numbers for JSON serialization
@@ -455,79 +450,68 @@ router.post('/sections/:farmId/:sectionNumber/mode', authenticateToken, validate
   }
 });
 
-// Start irrigation with duration
-router.post('/sections/:farmId/:sectionNumber/irrigate', authenticateToken, validateFarmAccess('body'), async (req, res) => {
+// Start irrigation
+router.post('/:farmId/:sectionNumber/irrigate', authenticateToken, validateFarmAccess('params'), async (req, res) => {
   try {
     const { farmId, sectionNumber } = req.params;
-    const { duration = 60 } = req.body; // duration in seconds
-    const farmIdInt = parseInt(farmId);
-    const sectionNumberInt = parseInt(sectionNumber);
+    const { duration = 60 } = req.body; // Default 60 seconds if not specified
 
-    if (duration <= 0 || duration > 3600) {
-      return res.status(400).json({ error: 'Duration must be between 1 and 3600 seconds' });
-    }
+    console.log(`🚰 Starting irrigation for Farm ${farmId}, Section ${sectionNumber}, Duration: ${duration}s`);
 
-    // Get section using farm_id and section_number
+    // Validate section exists
     const section = await prisma.section.findFirst({
-      where: { 
-        farm_id: farmIdInt,
-        section_number: sectionNumberInt
-      }
+      where: { farm_id: parseInt(farmId), section_number: parseInt(sectionNumber) }
     });
 
     if (!section) {
       return res.status(404).json({ error: 'Section not found' });
     }
 
-    try {
-      // FIXED: First set mode to manual (required for irrigation commands)
-      const modeCommand = {
-        mode: 'manual',
-        timestamp: new Date().toISOString()
-      };
-      const modeTopic = `farm/${farmIdInt}/section/${sectionNumberInt}/mode`;
-      console.log(`🔄 Setting mode to manual for ${modeTopic}`);
-      await sendMqttCommand(modeTopic, modeCommand);
-      
-      // Wait a moment for mode change to take effect
-      console.log('⏳ Waiting for mode change to take effect...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Send MQTT command to start irrigation
-      const mqttCommand = {
-        action: 'irrigate',
-        duration: duration,
-        timestamp: new Date().toISOString()
-      };
-
-      const topic = `farm/${farmIdInt}/section/${sectionNumberInt}/command`;
-      console.log(`🚰 Starting irrigation for ${duration}s on ${topic}`);
-      await sendMqttCommand(topic, mqttCommand);
-
-      console.log(`✅ Irrigation started successfully for farm ${farmIdInt}, section ${sectionNumberInt}`);
-
-      res.json({ 
-        success: true, 
-        message: `Started irrigation for ${duration} seconds on farm ${farmIdInt}, section ${sectionNumberInt}`,
-        duration: duration,
-        mqttCommand: mqttCommand
-      });
-
-      // Broadcast real-time update
-      broadcastSectionUpdate(farmIdInt, sectionNumberInt, {
-        valve_open: true,
-        mode: 'manual',
-        irrigation_duration: duration
-      });
-    } catch (error) {
-      console.error('❌ Error sending irrigation command:', error);
-      res.status(500).json({ 
-        error: 'Failed to send irrigation command to device',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
+    // Validate duration
+    if (duration <= 0 || duration > 3600) {
+      return res.status(400).json({ error: 'Duration must be between 1 and 3600 seconds' });
     }
+
+    // First set mode to manual (required for irrigation commands)
+    const modeCommand = {
+      mode: 'manual',
+      timestamp: new Date().toISOString()
+    };
+    const modeTopic = `farm/${farmId}/section/${sectionNumber}/mode`;
+    console.log(`🔄 Setting mode to manual for ${modeTopic}`);
+    await sendMqttCommand(modeTopic, modeCommand);
+    
+    // Wait a moment for mode change to take effect
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Send irrigation command
+    const mqttCommand = {
+      action: 'irrigate',
+      duration: duration,
+      timestamp: new Date().toISOString()
+    };
+
+    const topic = `farm/${farmId}/section/${sectionNumber}/command`;
+    console.log(`📡 Sending irrigation command to ${topic}:`, mqttCommand);
+    
+    await sendMqttCommand(topic, mqttCommand);
+
+    // Broadcast update
+    broadcastSectionUpdate(parseInt(farmId), parseInt(sectionNumber), {
+      valve_open: true,
+      mode: 'manual',
+      irrigation_duration: duration,
+      type: 'irrigation_start'
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Irrigation started for farm ${farmId}, section ${sectionNumber} for ${duration} seconds`,
+      duration: duration
+    });
+
   } catch (error) {
-    console.error('Error starting irrigation:', error);
+    console.error('❌ Error starting irrigation:', error);
     res.status(500).json({ error: 'Failed to start irrigation' });
   }
 });
@@ -774,39 +758,44 @@ router.post('/sections/bulk/stop-irrigation', authenticateToken, validateFarmAcc
 // Bulk mode change
 router.post('/sections/bulk/mode', authenticateToken, validateFarmAccess('body'), async (req, res) => {
   try {
-    const { sectionIds, mode } = req.body;
+    const { sections, mode } = req.body; // sections: [{farmId, sectionNumber}]
     const farmId = req.farmId || 1;
 
-    if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
-      return res.status(400).json({ error: 'sectionIds must be a non-empty array' });
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return res.status(400).json({ error: 'sections must be a non-empty array' });
     }
 
     if (!['auto', 'manual'].includes(mode)) {
       return res.status(400).json({ error: 'Invalid mode. Must be "auto" or "manual"' });
     }
 
-    const results = [];
-    const errors = [];
+    const results: any[] = [];
+    const errors: any[] = [];
 
     // Process each section
-    for (const sectionId of sectionIds) {
+    for (const section of sections) {
       try {
+        const { farmId: sectionFarmId, sectionNumber } = section;
+        const targetFarmId = sectionFarmId || farmId;
+        
         const mqttCommand = {
           mode: mode,
           timestamp: new Date().toISOString()
         };
 
-        const topic = `farm/${farmId}/section/${sectionId}/config`;
+        const topic = `farm/${targetFarmId}/section/${sectionNumber}/mode`;
         await sendMqttCommand(topic, mqttCommand);
 
         results.push({
-          sectionId,
+          farmId: targetFarmId,
+          sectionNumber,
           success: true,
           message: `Mode set to ${mode}`
         });
       } catch (error) {
         errors.push({
-          sectionId,
+          farmId: section.farmId || farmId,
+          sectionNumber: section.sectionNumber,
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -817,12 +806,12 @@ router.post('/sections/bulk/mode', authenticateToken, validateFarmAccess('body')
       success: true,
       message: `Bulk mode change completed`,
       summary: {
-        total: sectionIds.length,
+        total: sections.length,
         successful: results.length,
         failed: errors.length
       },
       results,
-      errors: errors.length > 0 ? errors : undefined
+      errors
     });
   } catch (error) {
     console.error('Error in bulk mode change:', error);
@@ -833,39 +822,44 @@ router.post('/sections/bulk/mode', authenticateToken, validateFarmAccess('body')
 // Bulk configuration update
 router.post('/sections/bulk/config', authenticateToken, validateFarmAccess('body'), async (req, res) => {
   try {
-    const { sectionIds, config } = req.body;
+    const { sections, config } = req.body; // sections: [{farmId, sectionNumber}]
     const farmId = req.farmId || 1;
 
-    if (!Array.isArray(sectionIds) || sectionIds.length === 0) {
-      return res.status(400).json({ error: 'sectionIds must be a non-empty array' });
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return res.status(400).json({ error: 'sections must be a non-empty array' });
     }
 
     if (!config || typeof config !== 'object') {
       return res.status(400).json({ error: 'config must be a valid object' });
     }
 
-    const results = [];
-    const errors = [];
+    const results: any[] = [];
+    const errors: any[] = [];
 
     // Process each section
-    for (const sectionId of sectionIds) {
+    for (const section of sections) {
       try {
+        const { farmId: sectionFarmId, sectionNumber } = section;
+        const targetFarmId = sectionFarmId || farmId;
+        
         const mqttCommand = {
           ...config,
           timestamp: new Date().toISOString()
         };
 
-        const topic = `farm/${farmId}/section/${sectionId}/config`;
+        const topic = `farm/${targetFarmId}/section/${sectionNumber}/config`;
         await sendMqttCommand(topic, mqttCommand);
 
         results.push({
-          sectionId,
+          farmId: targetFarmId,
+          sectionNumber,
           success: true,
           message: 'Configuration updated'
         });
       } catch (error) {
         errors.push({
-          sectionId,
+          farmId: section.farmId || farmId,
+          sectionNumber: section.sectionNumber,
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
         });
@@ -876,12 +870,12 @@ router.post('/sections/bulk/config', authenticateToken, validateFarmAccess('body
       success: true,
       message: `Bulk configuration update completed`,
       summary: {
-        total: sectionIds.length,
+        total: sections.length,
         successful: results.length,
         failed: errors.length
       },
       results,
-      errors: errors.length > 0 ? errors : undefined
+      errors
     });
   } catch (error) {
     console.error('Error in bulk configuration update:', error);
@@ -889,57 +883,75 @@ router.post('/sections/bulk/config', authenticateToken, validateFarmAccess('body
   }
 });
 
-// Configure device settings
-router.post('/sections/:farmId/:sectionNumber/config', authenticateToken, validateFarmAccess('body'), async (req, res) => {
+// Update section configuration
+router.put('/:farmId/:sectionNumber/config', authenticateToken, validateFarmAccess('params'), async (req, res) => {
   try {
     const { farmId, sectionNumber } = req.params;
-    const { threshold, enableDeepSleep, deepSleepDuration, reportingInterval } = req.body;
-    const farmIdInt = parseInt(farmId);
-    const sectionNumberInt = parseInt(sectionNumber);
+    const { 
+      threshold, 
+      min_threshold, 
+      max_threshold, 
+      enable_deep_sleep, 
+      deep_sleep_duration,
+      reporting_interval 
+    } = req.body;
 
-    // Get section using farm_id and section_number
+    console.log(`🔧 Updating config for Farm ${farmId}, Section ${sectionNumber}:`, req.body);
+
+    // Validate section exists
     const section = await prisma.section.findFirst({
-      where: { 
-        farm_id: farmIdInt,
-        section_number: sectionNumberInt
-      }
+      where: { farm_id: parseInt(farmId), section_number: parseInt(sectionNumber) }
     });
 
     if (!section) {
       return res.status(404).json({ error: 'Section not found' });
     }
 
-    const config: any = {};
-    if (threshold !== undefined) config.threshold = threshold;
-    if (enableDeepSleep !== undefined) config.enable_deep_sleep = enableDeepSleep;
-    if (deepSleepDuration !== undefined) config.deep_sleep_duration = deepSleepDuration;
-    if (reportingInterval !== undefined) config.reporting_interval = reportingInterval;
+    // Prepare MQTT config command
+    const configCommand: any = {
+      timestamp: new Date().toISOString()
+    };
 
-    // Send MQTT command to device
-    try {
-      const topic = `farm/${farmIdInt}/section/${sectionNumberInt}/config`;
-      const mqttCommand = {
-        ...config,
-        timestamp: new Date().toISOString()
-      };
-      
-      await sendMqttCommand(topic, mqttCommand);
-
-      res.json({ 
-        success: true, 
-        config: config,
-        message: `Configuration updated for farm ${farmIdInt}, section ${sectionNumberInt}`,
-        mqttCommand: mqttCommand
-      });
-    } catch (error) {
-      console.error('Error sending MQTT command:', error);
-      res.status(500).json({ 
-        error: 'Failed to send configuration to device',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
+    // Add config parameters if provided
+    if (threshold !== undefined) {
+      configCommand.threshold = threshold;
     }
+    if (min_threshold !== undefined) {
+      configCommand.min_threshold = min_threshold;
+    }
+    if (max_threshold !== undefined) {
+      configCommand.max_threshold = max_threshold;
+    }
+    if (enable_deep_sleep !== undefined) {
+      configCommand.enable_deep_sleep = enable_deep_sleep;
+    }
+    if (deep_sleep_duration !== undefined) {
+      configCommand.deep_sleep_duration = deep_sleep_duration;
+    }
+    if (reporting_interval !== undefined) {
+      configCommand.reporting_interval = reporting_interval;
+    }
+
+    // Send config command via MQTT
+    const topic = `farm/${farmId}/section/${sectionNumber}/config`;
+    console.log(`📡 Sending config command to ${topic}:`, configCommand);
+    
+    await sendMqttCommand(topic, configCommand);
+
+    // Broadcast update
+    broadcastSectionUpdate(parseInt(farmId), parseInt(sectionNumber), {
+      type: 'config_update',
+      config: configCommand
+    });
+
+    res.json({ 
+      success: true, 
+      message: `Configuration updated for farm ${farmId}, section ${sectionNumber}`,
+      config: configCommand
+    });
+
   } catch (error) {
-    console.error('Error updating config:', error);
+    console.error('❌ Error updating config:', error);
     res.status(500).json({ error: 'Failed to update configuration' });
   }
 });
@@ -1887,6 +1899,239 @@ router.get('/analytics/summary', authenticateToken, validateFarmAccess('query'),
   } catch (error) {
     console.error('Error fetching analytics summary:', error);
     res.status(500).json({ error: 'Failed to fetch analytics summary' });
+  }
+});
+
+// Water Usage Analytics
+router.get('/analytics/water-usage/:farmId', authenticateToken, validateFarmAccess('params'), async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const { period = '7d', sectionNumber } = req.query; // period: 1d, 7d, 30d, 90d, 1y
+
+    console.log(`📊 Generating water usage analytics for Farm ${farmId}, Period: ${period}`);
+
+    // Parse period to get interval
+    let interval: string;
+    let days: number;
+    switch (period) {
+      case '1d':
+        interval = '1 hour';
+        days = 1;
+        break;
+      case '7d':
+        interval = '1 day';
+        days = 7;
+        break;
+      case '30d':
+        interval = '1 day';
+        days = 30;
+        break;
+      case '90d':
+        interval = '1 week';
+        days = 90;
+        break;
+      case '1y':
+        interval = '1 month';
+        days = 365;
+        break;
+      default:
+        interval = '1 day';
+        days = 7;
+    }
+
+    // Build where clause
+    let whereClause = `WHERE farm_id = ${parseInt(farmId)}`;
+    if (sectionNumber) {
+      whereClause += ` AND section_number = ${parseInt(sectionNumber as string)}`;
+    }
+
+    // Get water usage by time period
+    const waterUsageByTime = await prisma.$queryRaw`
+      SELECT 
+        DATE_TRUNC(${interval}, start_time) as time_period,
+        section_number,
+        SUM(water_ml) / 1000.0 as water_liters,
+        COUNT(*) as irrigation_count,
+        AVG(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) as avg_duration_minutes
+      FROM irrigation_events 
+      ${whereClause}
+      AND start_time >= NOW() - INTERVAL '${days} days'
+      GROUP BY DATE_TRUNC(${interval}, start_time), section_number
+      ORDER BY time_period DESC, section_number
+    `;
+
+    // Get total water usage for the period
+    const totalUsage = await prisma.$queryRaw`
+      SELECT 
+        SUM(water_ml) / 1000.0 as total_water_liters,
+        COUNT(*) as total_irrigations,
+        AVG(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) as avg_duration_minutes,
+        MIN(start_time) as first_irrigation,
+        MAX(start_time) as last_irrigation
+      FROM irrigation_events 
+      ${whereClause}
+      AND start_time >= NOW() - INTERVAL '${days} days'
+    ` as any[];
+
+    // Get water usage by section
+    const usageBySection = await prisma.$queryRaw`
+      SELECT 
+        section_number,
+        SUM(water_ml) / 1000.0 as total_water_liters,
+        COUNT(*) as irrigation_count,
+        AVG(EXTRACT(EPOCH FROM (end_time - start_time)) / 60) as avg_duration_minutes,
+        MAX(water_ml) / 1000.0 as max_water_per_irrigation,
+        MIN(water_ml) / 1000.0 as min_water_per_irrigation
+      FROM irrigation_events 
+      ${whereClause}
+      AND start_time >= NOW() - INTERVAL '${days} days'
+      GROUP BY section_number
+      ORDER BY total_water_liters DESC
+    `;
+
+    // Get daily water usage for the last 30 days
+    const dailyUsage = await prisma.$queryRaw`
+      SELECT 
+        DATE(start_time) as date,
+        SUM(water_ml) / 1000.0 as water_liters,
+        COUNT(*) as irrigation_count
+      FROM irrigation_events 
+      ${whereClause}
+      AND start_time >= NOW() - INTERVAL '30 days'
+      GROUP BY DATE(start_time)
+      ORDER BY date DESC
+    `;
+
+    // Get efficiency metrics (water usage vs moisture levels)
+    const efficiencyMetrics = await prisma.$queryRaw`
+      SELECT 
+        ie.section_number,
+        AVG(ie.water_ml) / 1000.0 as avg_water_per_irrigation,
+        AVG(mr.value) as avg_moisture_before_irrigation,
+        COUNT(*) as irrigation_count
+      FROM irrigation_events ie
+      LEFT JOIN moisture_readings mr ON 
+        ie.farm_id = mr.farm_id AND 
+        ie.section_number = mr.section_number AND
+        mr.timestamp BETWEEN ie.start_time - INTERVAL '1 hour' AND ie.start_time
+      ${whereClause.replace('farm_id', 'ie.farm_id')}
+      AND ie.start_time >= NOW() - INTERVAL '${days} days'
+      GROUP BY ie.section_number
+      ORDER BY avg_water_per_irrigation DESC
+    `;
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        days,
+        total_usage: totalUsage[0] || {},
+        usage_by_time: waterUsageByTime,
+        usage_by_section: usageBySection,
+        daily_usage: dailyUsage,
+        efficiency_metrics: efficiencyMetrics
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error generating water usage analytics:', error);
+    res.status(500).json({ error: 'Failed to generate water usage analytics' });
+  }
+});
+
+// Water Usage Efficiency Report
+router.get('/analytics/efficiency/:farmId', authenticateToken, validateFarmAccess('params'), async (req, res) => {
+  try {
+    const { farmId } = req.params;
+    const { days = 30 } = req.query;
+
+    console.log(`📈 Generating efficiency report for Farm ${farmId}, Days: ${days}`);
+
+    // Get water usage efficiency by section
+    const efficiencyBySection = await prisma.$queryRaw`
+      SELECT 
+        ie.section_number,
+        s.name as section_name,
+        COUNT(*) as total_irrigations,
+        SUM(ie.water_ml) / 1000.0 as total_water_liters,
+        AVG(ie.water_ml) / 1000.0 as avg_water_per_irrigation,
+        AVG(EXTRACT(EPOCH FROM (ie.end_time - ie.start_time)) / 60) as avg_duration_minutes,
+        -- Calculate efficiency score (lower water usage = higher efficiency)
+        (100 - (AVG(ie.water_ml) / 1000.0 / 10)) as efficiency_score
+      FROM irrigation_events ie
+      JOIN sections s ON ie.farm_id = s.farm_id AND ie.section_number = s.section_number
+      WHERE ie.farm_id = ${parseInt(farmId)}
+      AND ie.start_time >= NOW() - INTERVAL '${parseInt(days as string)} days'
+      GROUP BY ie.section_number, s.name
+      ORDER BY efficiency_score DESC
+    `;
+
+    // Get water usage trends
+    const waterTrends = await prisma.$queryRaw`
+      SELECT 
+        DATE_TRUNC('week', start_time) as week,
+        SUM(water_ml) / 1000.0 as water_liters,
+        COUNT(*) as irrigation_count,
+        AVG(water_ml) / 1000.0 as avg_water_per_irrigation
+      FROM irrigation_events 
+      WHERE farm_id = ${parseInt(farmId)}
+      AND start_time >= NOW() - INTERVAL '${parseInt(days as string)} days'
+      GROUP BY DATE_TRUNC('week', start_time)
+      ORDER BY week DESC
+    `;
+
+    // Get peak usage times
+    const peakUsageTimes = await prisma.$queryRaw`
+      SELECT 
+        EXTRACT(HOUR FROM start_time) as hour_of_day,
+        COUNT(*) as irrigation_count,
+        SUM(water_ml) / 1000.0 as total_water_liters
+      FROM irrigation_events 
+      WHERE farm_id = ${parseInt(farmId)}
+      AND start_time >= NOW() - INTERVAL '${parseInt(days as string)} days'
+      GROUP BY EXTRACT(HOUR FROM start_time)
+      ORDER BY total_water_liters DESC
+      LIMIT 5
+    `;
+
+    // Get water savings recommendations
+    const recommendations = await prisma.$queryRaw`
+      SELECT 
+        ie.section_number,
+        s.name as section_name,
+        AVG(ie.water_ml) / 1000.0 as avg_water_per_irrigation,
+        AVG(mr.value) as avg_moisture_before_irrigation,
+        CASE 
+          WHEN AVG(mr.value) > 60 THEN 'Consider reducing irrigation frequency - soil moisture is high'
+          WHEN AVG(ie.water_ml) > 5000 THEN 'Consider reducing irrigation duration - high water usage detected'
+          ELSE 'Water usage appears optimal'
+        END as recommendation
+      FROM irrigation_events ie
+      JOIN sections s ON ie.farm_id = s.farm_id AND ie.section_number = s.section_number
+      LEFT JOIN moisture_readings mr ON 
+        ie.farm_id = mr.farm_id AND 
+        ie.section_number = mr.section_number AND
+        mr.timestamp BETWEEN ie.start_time - INTERVAL '1 hour' AND ie.start_time
+      WHERE ie.farm_id = ${parseInt(farmId)}
+      AND ie.start_time >= NOW() - INTERVAL '${parseInt(days as string)} days'
+      GROUP BY ie.section_number, s.name
+      ORDER BY avg_water_per_irrigation DESC
+    `;
+
+    res.json({
+      success: true,
+      data: {
+        days: parseInt(days as string),
+        efficiency_by_section: efficiencyBySection,
+        water_trends: waterTrends,
+        peak_usage_times: peakUsageTimes,
+        recommendations: recommendations
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error generating efficiency report:', error);
+    res.status(500).json({ error: 'Failed to generate efficiency report' });
   }
 });
 

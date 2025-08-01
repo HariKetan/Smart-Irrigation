@@ -199,6 +199,7 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe("farm/+/section/+/irrigation")
     client.subscribe("farm/+/section/+/status")
     client.subscribe("farm/+/section/+/ack")
+    client.subscribe("farm/+/section/+/config")
 
 def ensure_farm_exists(farm_id):
     """Ensure farm exists, create if it doesn't"""
@@ -425,6 +426,36 @@ def on_message(client, userdata, msg):
                 #     int(data.get("water_ml", 0)),
                 #     datetime.now().isoformat()
                 # )
+
+        elif topic_parts[-1] == "config":
+            # Handle configuration commands
+            if "min_threshold" in data:
+                min_threshold = data["min_threshold"]
+                cur.execute("""
+                    INSERT INTO irrigation_device_status 
+                    (farm_id, section_number, min_threshold, timestamp) 
+                    VALUES (%s, %s, %s, %s)
+                """, (farm_id, section_number, min_threshold, datetime.now()))
+                logger.info(f"Min threshold updated: Farm {farm_id}, Section {section_number}, Value: {min_threshold}")
+                
+            if "max_threshold" in data:
+                max_threshold = data["max_threshold"]
+                cur.execute("""
+                    INSERT INTO irrigation_device_status 
+                    (farm_id, section_number, max_threshold, timestamp) 
+                    VALUES (%s, %s, %s, %s)
+                """, (farm_id, section_number, max_threshold, datetime.now()))
+                logger.info(f"Max threshold updated: Farm {farm_id}, Section {section_number}, Value: {max_threshold}")
+                
+            # Legacy threshold support
+            if "threshold" in data:
+                threshold = data["threshold"]
+                cur.execute("""
+                    INSERT INTO irrigation_device_status 
+                    (farm_id, section_number, threshold, timestamp) 
+                    VALUES (%s, %s, %s, %s)
+                """, (farm_id, section_number, threshold, datetime.now()))
+                logger.info(f"Threshold updated: Farm {farm_id}, Section {section_number}, Value: {threshold}")
 
         elif topic_parts[-1] == "ack":
             # Get the actual section ID from the database using farm_id and section_number

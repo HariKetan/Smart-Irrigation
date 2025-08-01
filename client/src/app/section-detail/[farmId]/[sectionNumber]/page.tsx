@@ -319,21 +319,9 @@ export default function SectionDetailPage() {
         <IrrigationControl
           farmId={farmId}
           sectionNumber={sectionNumber}
-          currentMode={section.mode}
-          currentValveState={section.valveOpen}
-          currentMoisture={section.moisture}
-          currentThreshold={section.threshold}
-          deviceStatus={section.deviceStatus}
-          reportingInterval={deviceConfig.reportingInterval}
-          onModeChange={(mode) => {
-            setSection({ ...section, mode });
-          }}
-          onValveChange={(valveOpen) => {
-            setSection({ ...section, valveOpen });
-          }}
-          onConfigUpdate={(config) => {
-            console.log('Config updated:', config);
-          }}
+          initialMode={section.mode || 'manual'}
+          initialMoisture={section.moisture || 0}
+          initialValveOpen={section.valveOpen || false}
         />
 
         {/* Device Configuration */}

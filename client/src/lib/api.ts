@@ -149,13 +149,29 @@ export const api = {
   toggleValve: (farmId: number, sectionNumber: number, data: { valveOpen: boolean; duration?: number }) =>
     apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/valve`, data, false),
 
-  startIrrigation: (farmId: number, sectionNumber: number, duration: number) =>
-    apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/irrigate`, {
+  // Section control
+  startIrrigation: (farmId: number, sectionNumber: number, duration: number = 60) =>
+    apiClient.post(`/api/real/${farmId}/${sectionNumber}/irrigate`, {
       duration
     }, false),
 
   stopIrrigation: (farmId: number, sectionNumber: number) =>
-    apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/stop-irrigation`, {}, false),
+    apiClient.post(`/api/real/${farmId}/${sectionNumber}/stop-irrigation`, {}, false),
+
+  setMode: (farmId: number, sectionNumber: number, mode: string) =>
+    apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/mode`, {
+      mode
+    }, false),
+
+  updateConfig: (farmId: number, sectionNumber: number, config: {
+    threshold?: number;
+    min_threshold?: number;
+    max_threshold?: number;
+    enable_deep_sleep?: boolean;
+    deep_sleep_duration?: number;
+    reporting_interval?: number;
+  }) =>
+    apiClient.put(`/api/real/${farmId}/${sectionNumber}/config`, config, false),
 
   // Bulk operations
   bulkIrrigate: (sections: {farmId: number, sectionNumber: number}[], duration: number = 60) =>
@@ -225,20 +241,6 @@ export const api = {
   stopCronService: () => apiClient.post('/api/scheduling/cron/stop', {}, false),
   triggerCronManually: () => apiClient.post('/api/scheduling/cron/trigger', {}, false),
 
-  setMode: (farmId: number, sectionNumber: number, mode: string) =>
-    apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/mode`, {
-      mode
-    }, false),
-  
-  updateConfig: (farmId: number, sectionNumber: number, config: any) =>
-    apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/config`, config, false),
-
-  // Update reporting interval specifically
-  updateReportingInterval: (farmId: number, sectionNumber: number, intervalSeconds: number) =>
-    apiClient.post(`/api/real/sections/${farmId}/${sectionNumber}/config`, {
-      reportingInterval: intervalSeconds
-    }, false),
-  
   // Moisture readings
   getMoistureReadings: (params?: { farm_id?: number; section_number?: number; page?: number; limit?: number }) =>
     apiClient.get(`/api/real/moisture-readings${params ? '?' + new URLSearchParams(params as any).toString() : ''}`, false),
@@ -276,9 +278,13 @@ export const api = {
   getAnalyticsSummary: (period: number = 7) =>
     apiClient.get(`/api/real/analytics/summary?period=${period}`, false),
   
-  getWaterUsageAnalytics: (period: number = 7) =>
-    apiClient.get(`/api/real/analytics/water-usage?period=${period}`, false),
-  
+  // Water Usage Analytics
+  getWaterUsageAnalytics: (farmId: number, period: string = '7d', sectionNumber?: number) =>
+    apiClient.get(`/api/real/analytics/water-usage/${farmId}?period=${period}${sectionNumber ? `&sectionNumber=${sectionNumber}` : ''}`, false),
+
+  getWaterEfficiencyReport: (farmId: number, days: number = 30) =>
+    apiClient.get(`/api/real/analytics/efficiency/${farmId}?days=${days}`, false),
+
   getMoistureTrendsAnalytics: (period: number = 7) =>
     apiClient.get(`/api/real/analytics/moisture-trends?period=${period}`, false),
   
