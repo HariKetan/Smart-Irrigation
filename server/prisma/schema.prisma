@@ -65,14 +65,13 @@ model User {
 model MoistureReading {
   id         Int      @id @default(autoincrement())
   farm_id    Int
-  section_id Int
   section_number Int  // Section number within the farm (1-4)
   value      Float
   timestamp  DateTime @default(now())
 
   // Relationships
   farm       Farm     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
-  section    Section  @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  section    Section  @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
 
   // Index for efficient queries by farm_id + section_number
   @@index([farm_id, section_number])
@@ -82,7 +81,6 @@ model MoistureReading {
 model IrrigationEvent {
   id         Int      @id @default(autoincrement())
   farm_id    Int
-  section_id Int
   section_number Int  // Section number within the farm (1-4)
   water_ml   Float
   start_time DateTime
@@ -90,7 +88,7 @@ model IrrigationEvent {
 
   // Relationships
   farm       Farm     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
-  section    Section  @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  section    Section  @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
 
   // Index for efficient queries by farm_id + section_number
   @@index([farm_id, section_number])
@@ -101,12 +99,11 @@ model MoistureDeviceStatus {
   id                  Int      @id @default(autoincrement())
   device_id           String
   farm_id             Int
-  section_id          Int
   section_number      Int  // Section number within the farm (1-4)
   mqtt                Boolean
   wifi                Boolean
   uptime              BigInt
-  timestamp           BigInt
+  timestamp           DateTime @default(now())
   last_error          String
   enable_deep_sleep   Boolean
   reporting_interval  Int
@@ -115,7 +112,7 @@ model MoistureDeviceStatus {
 
   // Relationships
   farm        Farm     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
-  section     Section  @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  section     Section  @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
 
   // Index for efficient queries by farm_id + section_number
   @@index([farm_id, section_number])
@@ -126,7 +123,6 @@ model IrrigationDeviceStatus {
   id              Int      @id @default(autoincrement())
   device_id       String
   farm_id         Int
-  section_id      Int
   section_number  Int  // Section number within the farm (1-4)
   uptime          BigInt
   wifi            Int
@@ -135,15 +131,16 @@ model IrrigationDeviceStatus {
   valve_on        Int
   mode            String
   latest_moisture Int
-  threshold       Int
+  min_threshold   Int      @default(30)  // Minimum moisture threshold
+  max_threshold   Int      @default(70)  // Maximum moisture threshold
   pulse_count     Int
   water_ml        Int
-  timestamp       BigInt
+  timestamp       DateTime @default(now())
   createdAt       DateTime @default(now())
 
   // Relationships
   farm        Farm     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
-  section     Section  @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  section     Section  @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
 
   // Index for efficient queries by farm_id + section_number
   @@index([farm_id, section_number])
@@ -154,14 +151,13 @@ model DeviceAck {
   id         Int      @id @default(autoincrement())
   device_id  String?
   farm_id    Int
-  section_id Int
   section_number Int  // Section number within the farm (1-4)
   ack_json   Json
   timestamp  DateTime @default(now())
 
   // Relationships
   farm       Farm     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
-  section    Section  @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  section    Section  @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
 
   // Index for efficient queries by farm_id + section_number
   @@index([farm_id, section_number])
@@ -198,7 +194,6 @@ model ScheduledIrrigation {
   id              String   @id @default(cuid())
   schedule_id     String
   farm_id         Int
-  section_id      Int
   section_number  Int  // Section number within the farm (1-4)
   scheduled_time  DateTime
   executed_time   DateTime?
@@ -211,7 +206,7 @@ model ScheduledIrrigation {
   // Relationships
   schedule        IrrigationSchedule @relation(fields: [schedule_id], references: [id], onDelete: Cascade)
   farm            Farm     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
-  section         Section  @relation(fields: [section_id], references: [id], onDelete: Cascade)
+  section         Section  @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
 
   // Index for efficient queries by farm_id + section_number
   @@index([farm_id, section_number])

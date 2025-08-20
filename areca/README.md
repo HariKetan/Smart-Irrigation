@@ -4,7 +4,7 @@ This project is a modular, production-ready IoT solution for smart irrigation, f
 
 - ESP32-based moisture sensors and irrigation controllers
 - MQTT-based communication
-- Python backend for data logging, device management, and alerting
+- Node.js backend for data logging, device management, and alerting
 - PostgreSQL database for persistent storage
 
 ## Features
@@ -39,13 +39,16 @@ This project is a modular, production-ready IoT solution for smart irrigation, f
 
 ---
 
-## 2. Python Backend
+## 2. Node.js Backend
 
 - Subscribes to all relevant MQTT topics:
-  - `/moisture`, `/irrigation`, `/status`, `/ack`
-- Logs all data to PostgreSQL tables.
+  - `/moisture`, `/irrigation`, `/status`, `/ack`, `/config`
+- Logs all data to PostgreSQL tables using Prisma ORM.
 - Tracks device health and last seen time.
 - Sends config and command messages to devices.
+- Provides REST API for frontend communication.
+- Real-time WebSocket updates for live dashboard.
+- JWT authentication and multi-user support.
 - Background job alerts if a device is offline for >2 minutes.
 - Uses structured logging for all actions and errors.
 
