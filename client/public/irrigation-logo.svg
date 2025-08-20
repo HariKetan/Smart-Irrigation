@@ -1,0 +1,31 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Water droplet shape -->
+  <path d="M16 4C16 4 22 12 22 20C22 26 16 30 16 30C16 30 10 26 10 20C10 12 16 4 16 4Z" fill="url(#waterGradient)" stroke="url(#borderGradient)" stroke-width="1.5"/>
+  
+  <!-- Highlight/reflection -->
+  <ellipse cx="14" cy="12" rx="2" ry="1" fill="url(#highlightGradient)" opacity="0.6"/>
+  
+  <!-- Small water drop inside -->
+  <path d="M16 18C16 18 17 20 17 22C17 23 16 24 16 24C16 24 15 23 15 22C15 20 16 18 16 18Z" fill="url(#innerDropGradient)" opacity="0.8"/>
+  
+  <!-- Gradients -->
+  <defs>
+    <linearGradient id="waterGradient" x1="16" y1="4" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="0.5" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1E40AF"/>
+    </linearGradient>
+    <linearGradient id="borderGradient" x1="16" y1="4" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E40AF"/>
+      <stop offset="1" stop-color="#1E3A8A"/>
+    </linearGradient>
+    <linearGradient id="highlightGradient" x1="12" y1="11" x2="16" y2="13" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <linearGradient id="innerDropGradient" x1="16" y1="18" x2="16" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#93C5FD"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+  </defs>
+</svg>

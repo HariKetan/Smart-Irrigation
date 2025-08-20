@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { User } from "lucide-react"
+import { Droplets, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import {
@@ -21,8 +21,10 @@ export function DashboardNavbar() {
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-15 items-center px-4 w-full">
         <div className="mr-4 flex">
-          <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
-            <span className="font-bold">Your Logo</span>
+        <Link href="/" className="flex items-center space-x-2 font-bold text-xl">
+          <Droplets className="w-5 h-5" />
+            <span>Smart Irrigation</span>
+            
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">

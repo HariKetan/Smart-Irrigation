@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { Navbar } from "@/components/Navbar";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -65,7 +66,9 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex flex-col min-h-screen">
+      <Navbar />
+      <div className="flex flex-1 items-center justify-center">
       <Card className="w-[350px]">
         <CardHeader>
           <CardTitle>Register</CardTitle>
@@ -138,6 +141,7 @@ export default function RegisterPage() {
           </p>
         </CardFooter>
       </Card>
+      </div>
     </div>
   );
 } 

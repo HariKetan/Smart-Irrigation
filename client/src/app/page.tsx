@@ -8,7 +8,6 @@ export default function Home() {
       {/* <div style={{ backgroundColor: "red", height: "100px" }}></div> */}
       <Navbar />
       <LandingPage />
-      <DataDisplay />
     </div>
   )
 }
