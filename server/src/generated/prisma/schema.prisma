@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Farm {
+  id        Int      @id @default(autoincrement())
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  sections                 Section[]
+  moistureReadings         MoistureReading[]
+  irrigationEvents         IrrigationEvent[]
+  moistureDeviceStatuses   MoistureDeviceStatus[]
+  irrigationDeviceStatuses IrrigationDeviceStatus[]
+  deviceAcks               DeviceAck[]
+  irrigationSchedules      IrrigationSchedule[]
+  scheduledIrrigations     ScheduledIrrigation[]
+
+  @@map("farms")
+}
+
+model Section {
+  id             Int      @id @default(autoincrement())
+  name           String
+  farm_id        Int
+  section_number Int      @default(1) // This will be 1, 2, 3, 4 for each farm
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relationships
+  farm                     Farm                     @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  moistureReadings         MoistureReading[]
+  irrigationEvents         IrrigationEvent[]
+  moistureDeviceStatuses   MoistureDeviceStatus[]
+  irrigationDeviceStatuses IrrigationDeviceStatus[]
+  deviceAcks               DeviceAck[]
+  scheduledIrrigations     ScheduledIrrigation[]
+
+  // Ensure unique combination of farm_id and section_number within a farm
+  @@unique([farm_id, section_number], name: "farm_section_number_unique")
+  // Ensure unique combination of farm_id and section name within a farm
+  @@unique([farm_id, name], name: "farm_section_name_unique")
+  @@map("sections")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  farm_ids  Int[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MoistureReading {
+  id             Int      @id @default(autoincrement())
+  farm_id        Int
+  section_number Int // Section number within the farm (1-4)
+  value          Float
+  timestamp      DateTime @default(now())
+
+  // Relationships
+  farm    Farm    @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
+
+  // Index for efficient queries by farm_id + section_number
+  @@index([farm_id, section_number])
+  @@map("moisture_readings")
+}
+
+model IrrigationEvent {
+  id             Int      @id @default(autoincrement())
+  farm_id        Int
+  section_number Int // Section number within the farm (1-4)
+  water_ml       Float
+  start_time     DateTime
+  end_time       DateTime
+
+  // Relationships
+  farm    Farm    @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
+
+  // Index for efficient queries by farm_id + section_number
+  @@index([farm_id, section_number])
+  @@map("irrigation_events")
+}
+
+model MoistureDeviceStatus {
+  id                  Int      @id @default(autoincrement())
+  device_id           String
+  farm_id             Int
+  section_number      Int // Section number within the farm (1-4)
+  mqtt                Boolean
+  wifi                Boolean
+  uptime              BigInt
+  timestamp           DateTime @default(now())
+  last_error          String
+  enable_deep_sleep   Boolean
+  reporting_interval  Int
+  deep_sleep_duration Int
+  createdAt           DateTime @default(now())
+
+  // Relationships
+  farm    Farm    @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
+
+  // Index for efficient queries by farm_id + section_number
+  @@index([farm_id, section_number])
+  @@map("moisture_device_status")
+}
+
+model IrrigationDeviceStatus {
+  id              Int      @id @default(autoincrement())
+  device_id       String
+  farm_id         Int
+  section_number  Int // Section number within the farm (1-4)
+  uptime          BigInt
+  wifi            Int
+  mqtt            Int
+  last_error      String
+  valve_on        Int
+  mode            String
+  latest_moisture Int
+  min_threshold   Int      @default(30) // Minimum moisture threshold
+  max_threshold   Int      @default(70) // Maximum moisture threshold
+  pulse_count     Int
+  water_ml        Int
+  timestamp       DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  // Relationships
+  farm    Farm    @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
+
+  // Index for efficient queries by farm_id + section_number
+  @@index([farm_id, section_number])
+  @@map("irrigation_device_status")
+}
+
+model DeviceAck {
+  id             Int      @id @default(autoincrement())
+  device_id      String?
+  farm_id        Int
+  section_number Int // Section number within the farm (1-4)
+  ack_json       Json
+  timestamp      DateTime @default(now())
+
+  // Relationships
+  farm    Farm    @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
+
+  // Index for efficient queries by farm_id + section_number
+  @@index([farm_id, section_number])
+  @@map("device_acks")
+}
+
+model IrrigationSchedule {
+  id                String   @id @default(cuid())
+  name              String
+  farm_id           Int
+  section_numbers   Int[] // Array of section numbers (1-4) within the farm
+  start_time        String // HH:MM format
+  duration_minutes  Int
+  frequency         String // daily, weekly, monthly
+  days_of_week      Int[] // 0-6 (Sunday-Saturday) for weekly schedules
+  day_of_month      Int? // 1-31 for monthly schedules
+  is_active         Boolean  @default(true)
+  weather_dependent Boolean  @default(false) // Skip if rain forecast
+  min_temperature   Float? // Skip if temperature below this
+  max_temperature   Float? // Skip if temperature above this
+  min_moisture      Int? // Skip if moisture above this
+  created_by        String // User ID
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  // Relationships
+  farm                 Farm                  @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  scheduledIrrigations ScheduledIrrigation[]
+
+  @@map("irrigation_schedules")
+}
+
+model ScheduledIrrigation {
+  id               String    @id @default(cuid())
+  schedule_id      String
+  farm_id          Int
+  section_number   Int // Section number within the farm (1-4)
+  scheduled_time   DateTime
+  executed_time    DateTime?
+  status           String // pending, executed, skipped, failed
+  skip_reason      String? // weather, moisture, manual, error
+  duration_minutes Int
+  water_used       Float? // liters
+  created_at       DateTime  @default(now())
+
+  // Relationships
+  schedule IrrigationSchedule @relation(fields: [schedule_id], references: [id], onDelete: Cascade)
+  farm     Farm               @relation(fields: [farm_id], references: [id], onDelete: Cascade)
+  section  Section            @relation(fields: [farm_id, section_number], references: [farm_id, section_number], onDelete: Cascade)
+
+  // Index for efficient queries by farm_id + section_number
+  @@index([farm_id, section_number])
+  @@map("scheduled_irrigations")
+}
