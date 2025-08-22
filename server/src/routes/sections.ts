@@ -114,6 +114,7 @@ router.get(
 				distinct: ["section_number"],
 			});
 
+			
 			// Combine all data
 			const sectionsWithData = sections.map((section: any) => {
 				const moisture = (moistureReadings as any[]).find(
@@ -134,12 +135,36 @@ router.get(
 					(ds) => ds.section_number === section.section_number
 				);
 
+				let crop = "";
+				let plantingDate = "";
+	
+				if (section.section_number === 1) {
+					crop = "Arecanut";
+					plantingDate = "19-07-2025";
+				} else if (section.section_number === 2) {
+					crop = "Arecanut";
+					plantingDate = "20-07-2025";
+				}
+				else if (section.section_number === 3) {
+					crop = "Arecanut";
+					plantingDate = "21-07-2025";
+				}
+				else if (section.section_number === 4) {
+					crop = "Arecanut";
+					plantingDate = "22-07-2025";
+				}
+				else {
+					crop = `Crop ${section.section_number}`;
+					plantingDate = "Unknown Date";
+				}
+
 				return {
 					id: section.id,
 					farm_id: section.farm_id,
 					section_number: section.section_number,
 					name: section.name,
-					crop: `Crop ${section.section_number}`,
+					crop: crop,
+					plantingDate: plantingDate,
 					minThreshold: deviceStatus
 						? Number(deviceStatus.min_threshold)
 						: undefined,
@@ -149,7 +174,7 @@ router.get(
 					area: 2500,
 					location: `Zone ${section.section_number}`,
 					farm: section.farm,
-					moisture: moisture ? Math.round(moisture.moisture) : 50,
+					moisture: moisture ? Math.round(moisture.moisture) : 0,
 					waterUsed: water ? Math.round(water.waterUsed) : 0,
 					valveOpen: deviceStatus ? Boolean(deviceStatus.valve_on) : false,
 					mode: deviceStatus ? deviceStatus.mode : "manual",
@@ -200,7 +225,7 @@ router.get(
 			}
 
 			// Get latest moisture reading
-			let moisture = 50;
+			let moisture = 0;
 			try {
 				const moistureReading = await prisma.moistureReading.findFirst({
 					where: {
@@ -338,13 +363,36 @@ router.get(
 				console.error("Error fetching moisture device status:", error);
 			}
 
+			let crop = "";
+			let plantingDate = "";
+
+			if (section.section_number === 1) {
+				crop = "Arecanut";
+				plantingDate = "19-07-2025";
+			} else if (section.section_number === 2) {
+				crop = "Arecanut";
+				plantingDate = "20-07-2025";
+			} else if (section.section_number === 3) {
+				crop = "Arecanut";
+				plantingDate = "21-07-2025";
+			} else if (section.section_number === 4) {
+				crop = "Arecanut";
+				plantingDate = "22-07-2025";
+			}
+			else {	
+				crop = `Crop ${section.section_number}`;
+				plantingDate = "Unknown Date";
+			}
+
 			// Combine all data
 			const sectionWithData = {
 				id: section.id,
 				farm_id: section.farm_id,
 				section_number: section.section_number,
 				name: section.name,
-				crop: `Crop ${section.section_number}`,
+				// crop: `Crop ${section.section_number}`,
+				crop: crop,
+				plantingDate: plantingDate,
 				moisture: moisture,
 				minThreshold: minThreshold,
 				maxThreshold: maxThreshold,
