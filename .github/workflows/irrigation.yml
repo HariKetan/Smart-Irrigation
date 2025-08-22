@@ -1,0 +1,94 @@
+name: Smart Irrigation CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+      - "hotfix/**"
+      - "feature/**"
+      - "v*" # For version tags
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci --prefer-offline --no-audit
+
+      - name: Install server dependencies
+        run: |
+          cd server
+          npm ci --prefer-offline --no-audit
+
+      # - name: Run Lint & Tests
+      #   run: |
+      #     cd client && npm run lint
+      #     cd ../server && npm test || echo "No tests found"
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract git tag
+        id: get_tag
+        run: |
+          echo "GIT_TAG=$(git describe --tags --abbrev=0 || echo latest)" >> $GITHUB_ENV
+
+      - name: Build and push client Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/smart-irrigation-client:latest
+            ${{ secrets.DOCKER_USERNAME }}/smart-irrigation-client:${{ env.GIT_TAG }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/smart-irrigation-client:latest
+          cache-to: type=inline
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+            NODE_ENV=production
+            NEXT_PUBLIC_APP_NAME=Smart_Irrigation
+            NEXT_PUBLIC_APP_VERSION=${{ env.GIT_TAG }}
+
+      - name: Build and push server Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/smart-irrigation-server:latest
+            ${{ secrets.DOCKER_USERNAME }}/smart-irrigation-server:${{ env.GIT_TAG }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/smart-irrigation-server:latest
+          cache-to: type=inline
+          build-args: |
+            NODE_ENV=production
+            PORT=5000
+
+      # Optional: Upload build artifacts for debugging
+      # - name: Upload build artifacts
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: build
+      #     path: .next

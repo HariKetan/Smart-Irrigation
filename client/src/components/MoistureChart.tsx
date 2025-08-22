@@ -23,6 +23,7 @@ function formatHourLabel(hour: number): string {
 export function MoistureChart({ data }: MoistureChartProps) {
   const [currentDate, setCurrentDate] = useState<string>('');
   const [chartData, setChartData] = useState<any[]>([]);
+  const [lastProcessedDate, setLastProcessedDate] = useState<string>('');
 
   // Update current date and refresh chart data
   useEffect(() => {
@@ -30,47 +31,74 @@ export function MoistureChart({ data }: MoistureChartProps) {
       const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
       setCurrentDate(today);
       
-      if (data && data.length > 0) {
-        // Filter readings for today only
-        const todaysReadings = data.filter(reading => {
-          const readingDate = new Date(reading.timestamp).toLocaleDateString('en-CA');
-          return readingDate === today;
-        });
-
-        // Sort by timestamp
-        const sorted = todaysReadings.sort((a, b) => 
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
-
-        // Create 24-hour timeline with actual data
-        const hourlyData = Array.from({ length: 24 }, (_, hour) => {
-          const hourReadings = sorted.filter(reading => {
-            const readingHour = new Date(reading.timestamp).getHours();
-            return readingHour === hour;
+      // Only recalculate if we have a new date or no cached data
+      if (today !== lastProcessedDate || chartData.length === 0) {
+        if (data && data.length > 0) {
+          // Filter readings for today only
+          const todaysReadings = data.filter(reading => {
+            const readingDate = new Date(reading.timestamp).toLocaleDateString('en-CA');
+            return readingDate === today;
           });
 
-          if (hourReadings.length === 0) {
+          // Sort by timestamp
+          const sorted = todaysReadings.sort((a, b) => 
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+
+          // Create 24-hour timeline with actual data
+          const hourlyData = Array.from({ length: 24 }, (_, hour) => {
+            const hourReadings = sorted.filter(reading => {
+              const readingHour = new Date(reading.timestamp).getHours();
+              return readingHour === hour;
+            });
+
+            if (hourReadings.length === 0) {
+              return {
+                hour,
+                moisture: null,
+                readingCount: 0,
+                timeLabel: formatHourLabel(hour)
+              };
+            }
+
+            // Calculate average moisture for this hour
+            const totalMoisture = hourReadings.reduce((sum, reading) => sum + reading.value, 0);
+            const averageMoisture = Math.round((totalMoisture / hourReadings.length) * 100) / 100;
+
             return {
               hour,
-              moisture: null,
-              readingCount: 0,
+              moisture: averageMoisture,
+              readingCount: hourReadings.length,
               timeLabel: formatHourLabel(hour)
             };
+          });
+
+          // Fill in past hours with the most recent available data
+          const currentHour = new Date().getHours();
+          for (let hour = 0; hour <= currentHour; hour++) {
+            if (hourlyData[hour].moisture === null) {
+              // Find the most recent reading before this hour
+              const pastReadings = sorted.filter(reading => {
+                const readingHour = new Date(reading.timestamp).getHours();
+                return readingHour < hour;
+              });
+              
+              if (pastReadings.length > 0) {
+                // Use the most recent reading before this hour
+                const mostRecent = pastReadings[pastReadings.length - 1];
+                hourlyData[hour] = {
+                  hour,
+                  moisture: mostRecent.value,
+                  readingCount: 1,
+                  timeLabel: formatHourLabel(hour)
+                };
+              }
+            }
           }
 
-          // Calculate average moisture for this hour
-          const totalMoisture = hourReadings.reduce((sum, reading) => sum + reading.value, 0);
-          const averageMoisture = Math.round((totalMoisture / hourReadings.length) * 100) / 100;
-
-          return {
-            hour,
-            moisture: averageMoisture,
-            readingCount: hourReadings.length,
-            timeLabel: formatHourLabel(hour)
-          };
-        });
-
-        setChartData(hourlyData);
+          setChartData(hourlyData);
+          setLastProcessedDate(today); // Cache this date
+        }
       }
     };
 
@@ -95,7 +123,7 @@ export function MoistureChart({ data }: MoistureChartProps) {
     return () => {
       clearTimeout(midnightTimer);
     };
-  }, [data]);
+  }, [data, lastProcessedDate, chartData.length]); // Only depend on these values
 
   // Guard empty
   if (!data || data.length === 0) {
