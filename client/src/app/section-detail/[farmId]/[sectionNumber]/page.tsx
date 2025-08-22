@@ -743,7 +743,7 @@ export default function SectionDetailPage() {
 							<div>
 								<div className="font-medium">Today&apos;s Usage</div>
 								<div className="text-sm text-muted-foreground">
-									Target:{" "}
+									Required Water:{" "}
 									{editingTarget ? (
 										<span className="inline-flex items-center gap-2">
 											<Input

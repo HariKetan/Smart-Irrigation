@@ -308,42 +308,42 @@ export default function WaterReportPage() {
 					</TabsList>
 
 					<TabsContent value="overview" className="space-y-4">
-						<Card>
-							<CardHeader>
-								<CardTitle className="flex items-center gap-2">
-									<BarChart3 className="h-5 w-5" />
-									Water Usage Trends
-								</CardTitle>
-								<CardDescription>
-									Daily water consumption over the selected period
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								{reportData?.dailyUsage && reportData.dailyUsage.length > 0 ? (
-									<div className="space-y-4">
-										{reportData.dailyUsage.map((item, index) => (
-											<div key={index} className="flex items-center justify-between">
-												<div className="flex items-center gap-2">
-													<span className="text-sm font-medium">{item.date}</span>
-													<Badge variant="outline">{item.event_count} events</Badge>
-												</div>
-												<div className="text-right">
-													<div className="font-bold">{formatNumber(item.water_liters)}L</div>
-													<div className="text-xs text-muted-foreground">
-														{item.target_liters ? `${Math.round((item.water_liters / item.target_liters) * 100)}% of target` : ""}
+							<Card>
+								<CardHeader>
+									<CardTitle className="flex items-center gap-2">
+										<BarChart3 className="h-5 w-5" />
+										Water Usage Trends
+									</CardTitle>
+									<CardDescription>
+										Daily water consumption over the selected period
+									</CardDescription>
+								</CardHeader>
+								<CardContent>
+									{reportData?.dailyUsage && reportData.dailyUsage.length > 0 ? (
+										<div className="space-y-4">
+											{reportData.dailyUsage.map((item, index) => (
+												<div key={index} className="flex items-center justify-between">
+													<div className="flex items-center gap-2">
+														<span className="text-sm font-medium">{item.date}</span>
+														<Badge variant="outline">{item.event_count} events</Badge>
+													</div>
+													<div className="text-right">
+														<div className="font-bold">{formatNumber(item.water_liters)}L</div>
+														<div className="text-xs text-muted-foreground">
+															{item.target_liters ? `${Math.round((item.water_liters / item.target_liters) * 100)}% of target` : ""}
+														</div>
 													</div>
 												</div>
-											</div>
-										))}
-									</div>
-								) : (
-									<div className="text-center py-8 text-muted-foreground">
-										<Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
-										<p>No water usage data available for the selected period</p>
-									</div>
-								)}
-							</CardContent>
-						</Card>
+											))}
+										</div>
+									) : (
+										<div className="text-center py-8 text-muted-foreground">
+											<Droplets className="h-12 w-12 mx-auto mb-4 opacity-50" />
+											<p>No water usage data available for the selected period</p>
+										</div>
+									)}
+								</CardContent>
+							</Card>
 					</TabsContent>
 
 					<TabsContent value="daily" className="space-y-4">

@@ -696,7 +696,7 @@ export default function DashboardPage() {
 							<div className="text-lg md:text-2xl font-bold">
 								{formatNumber(totalWaterUsed)}L
 							</div>
-							<p className="text-xs text-muted-foreground">Last 7 days</p>
+							<p className="text-xs text-muted-foreground">Today</p>
 						</CardContent>
 					</Card>
 
