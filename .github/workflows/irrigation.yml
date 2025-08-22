@@ -24,17 +24,14 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "20"
-          cache: "npm"
 
       - name: Install client dependencies
-        run: |
-          cd client
-          npm ci --prefer-offline --no-audit
+        working-directory: ./client
+        run: npm ci --prefer-offline --no-audit
 
       - name: Install server dependencies
-        run: |
-          cd server
-          npm ci --prefer-offline --no-audit
+        working-directory: ./server
+        run: npm ci --prefer-offline --no-audit
 
       # - name: Run Lint & Tests
       #   run: |
