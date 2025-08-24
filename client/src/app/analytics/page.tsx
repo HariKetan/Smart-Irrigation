@@ -264,7 +264,7 @@ export default function Analytics() {
 
 					{/* Charts Section - 3-Grid Layout for Large Screens */}
 					<TabsContent value={activeTab} className="space-y-4">
-						<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+						<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-4">
 							{/* Water Usage Chart */}
 							<Card>
 								<CardHeader>
@@ -352,7 +352,7 @@ export default function Analytics() {
 							</Card>
 
 							{/* Valve Activity Chart - Spans 2 columns on large screens */}
-							<Card className="lg:col-span-2 xl:col-span-1">
+							{/* <Card className="lg:col-span-2 xl:col-span-1">
 								<CardHeader>
 									<CardTitle>Valve Activity</CardTitle>
 									<CardDescription>
@@ -381,10 +381,10 @@ export default function Analytics() {
 										</BarChart>
 									</ResponsiveContainer>
 								</CardContent>
-							</Card>
+							</Card> */}
 
 							{/* Irrigation Events Chart - Spans 2 columns on large screens */}
-							<Card className="lg:col-span-2 xl:col-span-1">
+							{/* <Card className="lg:col-span-2 xl:col-span-1">
 								<CardHeader>
 									<CardTitle>Irrigation Events</CardTitle>
 									<CardDescription>
@@ -413,7 +413,7 @@ export default function Analytics() {
 										</BarChart>
 									</ResponsiveContainer>
 								</CardContent>
-							</Card>
+							</Card> */}
 						</div>
 
 						{/* Data Table */}
