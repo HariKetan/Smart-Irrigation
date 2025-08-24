@@ -40,8 +40,8 @@ const char* mqtt_ca_cert =
 
 
 const int farm_id = 1;
-const int section_id = 1;
-const char* device_id = "moisture_sensor_1";
+const int section_id = 2;
+const char* device_id = "moisture_sensor_2";
 
 #define uS_TO_S_FACTOR 10000
 
