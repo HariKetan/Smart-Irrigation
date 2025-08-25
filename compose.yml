@@ -1,0 +1,85 @@
+services:
+  frontend:
+    container_name: frontend
+    image: hariketan03/smart-irrigation-client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  
+    networks:
+      - app_network
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - backend
+
+  backend:
+    image: hariketan03/smart-irrigation-server
+    container_name: backend        
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/arecanut
+      - JWT_SECRET=abcdefghujkl
+      - JWT_EXPIRES_IN=24h
+      - MQTT_BROKER_URL=mqtts://mqtt.judesonleo.app:8883
+      - MQTT_USERNAME=intellirack
+      - MQTT_PASSWORD=intellirack@123
+      - CORS_ORIGIN=http://143.10.178.117:3000
+      - PORT=5000
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - BCRYPT_ROUNDS=12
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - WS_HEARTBEAT_INTERVAL=30000
+      - WS_MAX_CLIENTS=100
+      - CRON_ENABLED=true
+      - CRON_CHECK_INTERVAL=60000
+    ports:
+      - "5000:5000"
+    restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    depends_on:
+      - postgres
+    networks:
+      - app_network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=arecanut
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - app_network
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: always
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_STOPPED=true
+      - WATCHTOWER_REVIVE_STOPPED=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_LABEL_ENABLE=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
