@@ -35,8 +35,8 @@ RUN adduser --system --uid 1001 nodejs
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
-# Copy the generated Prisma client
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+# Copy the generated Prisma client to maintain the directory structure
+COPY --from=builder --chown=nodejs:nodejs /app/src/generated ./src/generated
 
 USER nodejs
 
