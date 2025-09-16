@@ -3,7 +3,7 @@ FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl-dev
 WORKDIR /app
 
 # Copy package files
@@ -35,8 +35,10 @@ RUN adduser --system --uid 1001 nodejs
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
-# Copy the generated Prisma client to maintain the directory structure
-COPY --from=builder --chown=nodejs:nodejs /app/src/generated ./src/generated
+# Copy the generated Prisma client where the compiled code expects it
+# dist/lib/prisma.js looks for ../generated/prisma, so we need /app/dist/generated/prisma
+RUN mkdir -p /app/dist/generated
+COPY --from=builder --chown=nodejs:nodejs /app/src/generated/prisma /app/dist/generated/prisma
 
 USER nodejs
 
