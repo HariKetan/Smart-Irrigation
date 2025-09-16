@@ -144,30 +144,35 @@ router.get(
 
 			// Calculate summary statistics
 			const totalWaterUsage =
-				waterUsage.reduce((sum, item) => sum + (item._sum.water_ml || 0), 0) /
-				1000; // Convert to liters
+				waterUsage.reduce(
+					(sum: number, item: (typeof waterUsage)[number]) =>
+						sum + (item._sum.water_ml || 0),
+					0
+				) / 1000; // Convert to liters
 			const totalEvents = waterUsage.reduce(
-				(sum, item) => sum + (item._count.id || 0),
+				(sum: number, item: (typeof waterUsage)[number]) =>
+					sum + (item._count.id || 0),
 				0
 			);
 			const averageMoisture =
 				moistureReadings.length > 0
 					? moistureReadings.reduce(
-							(sum, item) => sum + (item._avg.value || 0),
+							(sum: number, item: (typeof moistureReadings)[number]) =>
+								sum + (item._avg.value || 0),
 							0
 					  ) / moistureReadings.length
 					: 0;
 			const activeValves = irrigationDevices.filter(
-				(device) => device.valve_on === 1
+				(device: (typeof irrigationDevices)[number]) => device.valve_on === 1
 			).length;
 
 			const result = {
-				waterUsage: waterUsage.map((item) => ({
+				waterUsage: waterUsage.map((item: (typeof waterUsage)[number]) => ({
 					section_number: item.section_number,
 					water_liters: (item._sum.water_ml || 0) / 1000,
 					irrigation_count: item._count.id || 0,
 				})),
-				moistureReadings: moistureReadings.map((item) => ({
+				moistureReadings: moistureReadings.map((item: (typeof moistureReadings)[number]) => ({
 					section_number: item.section_number,
 					avg_moisture: item._avg.value || 0,
 					min_moisture: item._min.value || 0,
@@ -249,7 +254,7 @@ router.get(
 			});
 
 			// Format the data for charts and group by date properly
-			const waterUsageByDate = waterUsage.reduce((acc: any, item) => {
+			const waterUsageByDate = waterUsage.reduce((acc: any, item: (typeof waterUsage)[number]) => {
 				const date = new Date(item.start_time);
 				const dayKey = date.toISOString().split("T")[0]; // YYYY-MM-DD format
 
@@ -360,7 +365,7 @@ router.get(
 			});
 
 			// Format the data for charts and group by date properly
-			const moistureByDate = moistureData.reduce((acc: any, item) => {
+			const moistureByDate = moistureData.reduce((acc: any, item: (typeof moistureData)[number]) => {
 				const date = new Date(item.timestamp);
 				const dayKey = date.toISOString().split("T")[0]; // YYYY-MM-DD format
 
@@ -639,14 +644,14 @@ router.get(
 			});
 
 			// Group by section
-			const sectionUsage = irrigationEvents.reduce((acc: any[], event) => {
+			const sectionUsage = irrigationEvents.reduce((acc: any[], event: (typeof irrigationEvents)[number]) => {
 				const durationMinutes =
 					(new Date(event.end_time).getTime() -
 						new Date(event.start_time).getTime()) /
 					(1000 * 60);
 
 				const existingSection = acc.find(
-					(item) => item.section_number === event.section_number
+					(item: any) => item.section_number === event.section_number
 				);
 
 				if (existingSection) {
@@ -670,10 +675,10 @@ router.get(
 			}, []);
 
 			// Sort by section number and round values
-			sectionUsage.sort((a, b) => a.section_number - b.section_number);
+			sectionUsage.sort((a: any, b: any) => a.section_number - b.section_number);
 
 			// Round values to 2 decimal places
-			const finalSectionUsage = sectionUsage.map((item) => ({
+			const finalSectionUsage = sectionUsage.map((item: any) => ({
 				...item,
 				water_liters: Math.round(item.water_liters * 100) / 100,
 				avg_duration_minutes: Math.round(item.avg_duration_minutes * 100) / 100,
@@ -730,7 +735,7 @@ router.get(
 			);
 
 			// Debug: Show all events
-			irrigationEvents.forEach((event, index) => {
+			irrigationEvents.forEach((event: (typeof irrigationEvents)[number], index: number) => {
 				console.log(
 					`📅 Event ${index + 1}: Date: ${
 						new Date(event.start_time).toISOString().split("T")[0]
@@ -789,7 +794,7 @@ router.get(
 			);
 
 			// Group by day and section
-			const dailyUsage = irrigationEvents.reduce((acc: any[], event) => {
+			const dailyUsage = irrigationEvents.reduce((acc: any[], event: any) => {
 				const date = new Date(event.start_time);
 				const dayKey = date.toISOString().split("T")[0]; // YYYY-MM-DD format
 				const durationMinutes =
@@ -803,9 +808,9 @@ router.get(
 
 				// If sectionNumber is provided, group only by date (not by section_number)
 				const existingDay = sectionNumber
-					? acc.find((item) => item.date === dayKey)
+					? acc.find((item: any) => item.date === dayKey)
 					: acc.find(
-							(item) =>
+							(item: any) =>
 								item.date === dayKey &&
 								item.section_number === event.section_number
 					  );
@@ -836,7 +841,7 @@ router.get(
 				}
 
 				return acc;
-			}, []);
+			}, [] as any[]);
 
 			console.log(`📊 Final daily usage data:`, dailyUsage);
 
@@ -855,7 +860,7 @@ router.get(
 			}
 
 			// Sort by date (desc) and section number
-			dailyUsage.sort((a, b) => {
+			dailyUsage.sort((a: any, b: any) => {
 				if (a.date !== b.date) {
 					return b.date.localeCompare(a.date);
 				}
@@ -876,7 +881,7 @@ router.get(
 			const targetDailyUsage = avgDailyUsage * 1.2; // 20% buffer
 
 			// Round values to 2 decimal places and add target
-			const finalDailyUsage = dailyUsage.map((item) => ({
+			const finalDailyUsage = dailyUsage.map((item: any) => ({
 				...item,
 				water_liters: Math.round(item.water_liters * 100) / 100,
 				avg_duration_minutes: Math.round(item.avg_duration_minutes * 100) / 100,
@@ -991,7 +996,7 @@ router.get(
 			});
 
 			// Group by day
-			const dailyActivity = irrigationEvents.reduce((acc: any[], event) => {
+			const dailyActivity = irrigationEvents.reduce((acc: any[], event: (typeof irrigationEvents)[number]) => {
 				const date = new Date(event.start_time);
 				const dayKey = date.toISOString().split("T")[0]; // YYYY-MM-DD format
 
@@ -1013,7 +1018,7 @@ router.get(
 			}, []);
 
 			// Sort by date (desc)
-			dailyActivity.sort((a, b) => b.date.localeCompare(a.date));
+			dailyActivity.sort((a: any, b: any) => b.date.localeCompare(a.date));
 
 			res.json(dailyActivity);
 		} catch (error) {

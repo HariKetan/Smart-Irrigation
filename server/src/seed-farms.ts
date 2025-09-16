@@ -35,7 +35,7 @@ async function seedFarmsAndUsers() {
     
     // First, let's check what sections already exist
     const existingSections = await prisma.section.findMany();
-    console.log('Existing sections:', existingSections.map(s => ({ id: s.id, name: s.name, farm_id: s.farm_id, section_number: s.section_number })));
+    console.log('Existing sections:', existingSections.map((s: { id: number; name: string; farm_id: number; section_number: number; }) => ({ id: s.id, name: s.name, farm_id: s.farm_id, section_number: s.section_number })));
     
     // Create sections for Farm 1 (Main Farm)
     for (let sectionNum = 1; sectionNum <= 4; sectionNum++) {

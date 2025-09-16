@@ -132,7 +132,7 @@ router.get(
 
 				// Get device status for this section
 				const deviceStatus = deviceStatuses.find(
-					(ds) => ds.section_number === section.section_number
+					(ds: (typeof deviceStatuses)[number]) => ds.section_number === section.section_number
 				);
 
 				let crop = "";

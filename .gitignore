@@ -4,3 +4,4 @@ docker-compose.yml
 database-backups/
 *.sql
 .env.backup
+compose.yml
