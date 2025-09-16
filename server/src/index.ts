@@ -140,7 +140,24 @@ export const broadcastSectionUpdate = (
 // Middleware
 app.use(
 	cors({
-		origin: serverConfig.corsOrigin,
+		origin: (origin, callback) => {
+			// Allow requests with no origin (like mobile apps or curl requests)
+			if (!origin) return callback(null, true);
+			
+			// Check if origin is in allowed list
+			const allowedOrigins = [
+				serverConfig.corsOrigin,
+				'https://smartirrigation.hariketan.me',
+				'http://localhost:3000',
+				'http://143.10.178.117:3000'
+			];
+			
+			if (allowedOrigins.includes(origin)) {
+				return callback(null, true);
+			}
+			
+			return callback(new Error('Not allowed by CORS'), false);
+		},
 		credentials: true,
 	})
 );
